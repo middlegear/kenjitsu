@@ -135,7 +135,7 @@ export default async function AllAnimeRoutes(fastify: FastifyInstance) {
           return reply.status(500).send(result);
         }
         if (result && Array.isArray(result.data) && result.data.length > 0) {
-          await redisSetCache(cacheKey, result, 24);
+          await redisSetCache(cacheKey, result, 12);
         }
         return reply.status(200).send(result);
       } catch (error) {

@@ -506,7 +506,7 @@ export default async function hianimeRoutes(fastify: FastifyInstance) {
         }
 
         if (result && typeof result === 'object' && result.data !== null) {
-          await redisSetCache(cacheKey, result, 168);
+          await redisSetCache(cacheKey, result, 12);
         }
 
         return reply.status(200).send(result);

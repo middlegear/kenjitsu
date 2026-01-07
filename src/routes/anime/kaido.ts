@@ -504,7 +504,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
           return reply.status(500).send(result);
         }
         if (result && typeof result === 'object' && result.data !== null) {
-          await redisSetCache(cacheKey, result, 168);
+          await redisSetCache(cacheKey, result, 12);
         }
 
         return reply.status(200).send(result);
