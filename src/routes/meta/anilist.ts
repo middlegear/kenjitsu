@@ -476,7 +476,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/episodes/:id',
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${0.25 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
       const provider =
