@@ -62,10 +62,16 @@ async function FastifyApp() {
       reply.header('Surrogate-Control', 'no-store');
     }
 
+    /// remove rate limit headers since plugin doesnt work
+    if (status === 200) {
+      // reply.removeHeader('x-ratelimit-limit');
+      reply.removeHeader('x-ratelimit-remaining');
+      reply.removeHeader('x-ratelimit-reset');
+    }
     return payload;
   });
 
-  app.register(rateLimitPlugIn, ratelimitOptions);
+  await app.register(rateLimitPlugIn, ratelimitOptions);
 
   await checkRedis();
   await app.register(fastifyCors, corsOptions);

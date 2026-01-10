@@ -8,6 +8,7 @@ export const ratelimitOptions = {
   max: Number(process.env.MAX_API_REQUESTS) || 120,
   global: true,
   ban: 1,
+  ////busted stuff
   addHeaders: {
     'x-ratelimit-limit': true,
     'x-ratelimit-remaining': false,
