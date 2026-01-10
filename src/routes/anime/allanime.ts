@@ -8,7 +8,7 @@ const allanime = new AllAnime();
 
 export default async function AllAnimeRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=300');
+    reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
 
     const q = request.query.q;
 
@@ -30,7 +30,7 @@ export default async function AllAnimeRoutes(fastify: FastifyInstance) {
         return reply.status(500).send(result);
       }
       if (result && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 168);
+        await redisSetCache(cacheKey, result, 12);
       }
       return reply.status(200).send(result);
     } catch (error) {

@@ -43,7 +43,7 @@ export default async function hianimeRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
 
     const { q, page = 1 } = request.query;
     if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
@@ -66,7 +66,7 @@ export default async function hianimeRoutes(fastify: FastifyInstance) {
         return reply.status(500).send(result);
       }
       if (result && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 168);
+        await redisSetCache(cacheKey, result, 12);
       }
       return reply.status(200).send(result);
     } catch (error) {
@@ -93,7 +93,7 @@ export default async function hianimeRoutes(fastify: FastifyInstance) {
         return reply.status(500).send(result);
       }
       if (result && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 168);
+        await redisSetCache(cacheKey, result, 12);
       }
       return reply.status(200).send(result);
     } catch (error) {
