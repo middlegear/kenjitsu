@@ -63,8 +63,16 @@ async function FastifyApp() {
       reply.header('Surrogate-Control', 'no-store');
     }
 
+    if (status === 200) {
+      reply.removeHeader('x-ratelimit-limit');
+      reply.removeHeader('x-ratelimit-remaining');
+      reply.removeHeader('x-ratelimit-reset');
+    }
+
     const reset = reply.getHeader('x-ratelimit-reset');
-    if (reset) reply.header('Retry-After', reset);
+    if (reset && status === 429) {
+      reply.header('Retry-After', reset);
+    }
 
     return payload;
   });
