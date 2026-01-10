@@ -10,7 +10,5 @@ export const ratelimitOptions = {
   ban: 1,
   addHeaders: {
     'x-ratelimit-limit': true,
-    'x-ratelimit-remaining': true,
-    'x-ratelimit-reset': true,
   },
 };
