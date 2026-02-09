@@ -26,7 +26,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result }, `External API Error`);
         return reply.status(500).send(result);
       }
@@ -59,7 +59,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, q, page }, `External API Error.`);
         return reply.status(500).send(result);
       }
@@ -91,7 +91,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, q }, `External API Error`);
         return reply.status(500).send(result);
       }
@@ -130,7 +130,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error `);
         return reply.status(500).send(result);
       }
@@ -222,7 +222,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, page, category }, `External API Error`);
           return reply.status(500).send(result);
         }
@@ -284,7 +284,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, page, status }, `External API Error: Failed to fetch recent anime`);
           return reply.status(500).send(result);
         }
@@ -326,7 +326,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, sort, page }, `External API Error`);
           return reply.status(500).send(result);
         }
@@ -375,7 +375,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, page, format }, `External API Error`);
           return reply.status(500).send(result);
         }
@@ -418,7 +418,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, page, genre }, `External API Error: Failed to fetch genre list`);
           return reply.status(500).send(result);
         }
@@ -459,7 +459,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error: Failed to fetch episode list`);
         return reply.status(500).send(result);
       }
@@ -499,7 +499,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, episodeId }, `External API Error: Failed to fetch server list`);
           return reply.status(500).send(result);
         }
@@ -550,7 +550,7 @@ export default async function KaidoRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, episodeId, server, version }, `External API Error: Failed to fetch sources`);
           return reply.status(500).send(result);
         }

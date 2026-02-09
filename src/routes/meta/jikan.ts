@@ -35,7 +35,7 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, q, page, perPage }, `External API Error: Failed to fetch search results`);
         return reply.status(500).send(result);
       }
@@ -76,7 +76,7 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error: Failed to fetch animeInfo`);
         return reply.status(500).send(result);
       }
@@ -156,7 +156,7 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, page, perPage, format, category }, `External API Error: Failed to fetch anime`);
           return reply.status(500).send(result);
         }
@@ -201,7 +201,7 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error: Failed to fetch next seasonal anime list`);
         return reply.status(500).send(result);
       }
@@ -276,7 +276,7 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error(
             { result, page, perPage, season, year, format },
             `External API Error: Failed to fetch seasonal anime list`,
@@ -336,7 +336,7 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, id, provider }, `External API Error: Failed to fetch provider info.`);
           return reply.status(500).send(result);
         }
@@ -393,7 +393,7 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, id, provider }, `External API Error: Failed to fetch provider episodes.`);
           return reply.status(500).send(result);
         }

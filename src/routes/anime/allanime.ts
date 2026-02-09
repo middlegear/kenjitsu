@@ -198,7 +198,7 @@ export default async function AllAnimeRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, episodeId, version }, `External API Error`);
           return reply.status(500).send(result);
         }

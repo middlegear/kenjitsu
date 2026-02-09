@@ -27,7 +27,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, q }, `External API Error: Failed to fetch search results for query:${q}`);
         return reply.status(500).send(result);
       }
@@ -63,7 +63,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, page }, `External API Error: Failed to fetch recent episodes results`);
         return reply.status(500).send(result);
       }
@@ -97,7 +97,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
     try {
       const result = await animepahe.fetchAnimeInfo(id);
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error: Failed to fetch anime info`);
         return reply.status(500).send(result);
       }
@@ -153,7 +153,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error: Failed to fetch episodes`);
         return reply.status(500).send(result);
       }
@@ -188,7 +188,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
       try {
         const result = await animepahe.fetchServers(episodeId);
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, episodeId }, `External API Error: Failed to fetch servers`);
           return reply.status(500).send(result);
         }
@@ -241,7 +241,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, episodeId, version }, `External API Error: Failed to fetch sources`);
           return reply.status(500).send(result);
         }

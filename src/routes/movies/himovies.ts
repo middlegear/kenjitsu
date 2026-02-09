@@ -25,7 +25,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result }, `External API Error`);
         return reply.status(500).send(result);
       }
@@ -59,7 +59,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, q, page }, `External API Error: Failed to fetch search results.`);
         return reply.status(500).send(result);
       }
@@ -92,7 +92,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, q }, `External API Error: Failed to fetch search results.`);
         return reply.status(500).send(result);
       }
@@ -152,7 +152,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
           });
         }
 
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result }, `External API Error.`);
           return reply.status(500).send(result);
         }
@@ -213,7 +213,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result }, `External API Error.`);
           return reply.status(500).send(result);
         }
@@ -249,7 +249,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result }, `External API Error.`);
         return reply.status(500).send(result);
       }
@@ -306,7 +306,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result }, `External API Error.`);
           return reply.status(500).send(result);
         }
@@ -349,7 +349,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result }, `External API Error.`);
           return reply.status(500).send(result);
         }
@@ -396,7 +396,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result }, `External API Error.`);
           return reply.status(500).send(result);
         }
@@ -440,7 +440,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result }, `External API Error.`);
           return reply.status(500).send(result);
         }
@@ -480,7 +480,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result }, `External API Error.`);
           return reply.status(500).send(result);
         }
@@ -525,7 +525,7 @@ export default async function himoviesRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result }, `External API Error.`);
           return reply.status(500).send(result);
         }

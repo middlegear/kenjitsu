@@ -25,7 +25,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, q }, `External API Error`);
         return reply.status(500).send(result);
       }
@@ -53,7 +53,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result }, `External API Error`);
         return reply.status(500).send(result);
       }
@@ -92,7 +92,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error: Failed to fetch anime info`);
         return reply.status(500).send(result);
       }
@@ -141,7 +141,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, episodeId }, `External API Error: Failed to fetch sources`);
           return reply.status(500).send(result);
         }

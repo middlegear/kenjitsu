@@ -35,7 +35,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, q, page, perPage }, `External API Error: Failed to fetch search results`);
         return reply.status(500).send(result);
       }
@@ -76,7 +76,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error: Failed to fetch animeinfo `);
         return reply.status(500).send(result);
       }
@@ -154,7 +154,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error({ result, page, perPage }, `External API Error: Failed to fetch top animelist `);
           return reply.status(500).send(result);
         }
@@ -198,7 +198,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error: Failed to fetch characters `);
         return reply.status(500).send(result);
       }
@@ -238,7 +238,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error: Failed to fetch related anime.`);
         return reply.status(500).send(result);
       }
@@ -269,7 +269,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
   //   try {
   //     const result = await anilist.fetchAiringSchedule(page, score);
-  //     if ('error' in result) {
+  //     if(result.error) {
   //       request.log.error({ result, page, score }, `External API Error: Failed to fetch airing schedule.`);
   //       return reply.status(500).send(result);
   //     }
@@ -313,7 +313,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           error: 'External provider returned an invalid response(null)',
         });
       }
-      if ('error' in result) {
+      if (result.error) {
         request.log.error({ result, id }, `External API Error: Failed to fetch media schedule.`);
         return reply.status(500).send(result);
       }
@@ -379,7 +379,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
             error: 'External provider returned an invalid response(null)',
           });
         }
-        if ('error' in result) {
+        if (result.error) {
           request.log.error(
             { result, season, year, page, perPage, format },
             `External API Error: Failed to fetch season list.`,
