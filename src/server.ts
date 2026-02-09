@@ -13,12 +13,11 @@ import AnilistRoutes from './routes/meta/anilist.js';
 import JikanRoutes from './routes/meta/jikan.js';
 import HimoviesRoutes from './routes/movies/himovies.js';
 import FlixHQRoutes from './routes/movies/flixhq.js';
-import TheMovieDatabaseRoutes from './routes/meta/tmdb.js';
 
 import { ratelimitOptions, rateLimitPlugIn } from './config/ratelimit.js';
 import fastifyCors, { corsOptions } from './config/cors.js';
 import { checkRedis } from './config/redis.js';
-import AkiHRoutes from './routes/hentai/aki-h.js';
+
 events.defaultMaxListeners = 25;
 
 const app = Fastify({
@@ -88,8 +87,7 @@ async function FastifyApp() {
   await app.register(AllAnimeRoutes, { prefix: '/api/allanime' });
   await app.register(FlixHQRoutes, { prefix: '/api/flixhq' });
   await app.register(HimoviesRoutes, { prefix: '/api/himovies' });
-  await app.register(TheMovieDatabaseRoutes, { prefix: '/api/tmdb' });
-  await app.register(AkiHRoutes, { prefix: '/api/akih' });
+
   try {
     const port = parseInt(process.env.PORT || '3000', 10);
     const host = process.env.HOST || '0.0.0.0';
