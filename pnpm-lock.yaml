@@ -18,10 +18,10 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0
       dotenv:
-        specifier: ^17.2.3
+        specifier: ^17.2.4
         version: 17.2.4
       fastify:
-        specifier: ^5.7.1
+        specifier: ^5.7.4
         version: 5.7.4
       ioredis:
         specifier: ^5.9.2
@@ -31,7 +31,7 @@ importers:
         version: 1.0.0
     devDependencies:
       '@types/node':
-        specifier: ^24.10.9
+        specifier: ^24.10.12
         version: 24.10.12
       prettier:
         specifier: ^3.8.1

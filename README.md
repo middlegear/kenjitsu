@@ -11,12 +11,18 @@ A lightweight, high-performance Node.js API built with **Fastify** for deliverin
 *   **JSON-based responses** — ready for integration with web and mobile apps
 
 
-### Docker Image
+## Getting Started
+
+### Docker
+
+Pull the latest image directly from GHCR:
 
 ```bash
 docker pull ghcr.io/middlegear/kenjitsu-api:latest
 ```
+### One-Click Deployment
 
+<p align="start"> <a href="https://vercel.com/new/clone?repository-url=https://github.com/middlegear/kenjitsu"> <img src="https://vercel.com/button" alt="Deploy with Vercel" height="42"> </a> &nbsp;&nbsp; <a href="https://app.koyeb.com/deploy?name=kenjitsu&type=git&repository=middlegear%2Fkenjitsu&branch=main&build_command=pnpm+install+%26%26+pnpm+build&run_command=pnpm+start&instance_type=free&regions=fra&instances_min=0&autoscaling_sleep_idle_delay=3900"> <img src="https://www.koyeb.com/static/images/deploy/button.svg" alt="Deploy to Koyeb" height="42"> </a> </p>
 
 ## Documentation
 
@@ -25,9 +31,11 @@ Complete API reference including endpoints, request parameters, and response sch
  **[kenjitsu-docs.vercel.app](https://kenjitsu-docs.vercel.app)**
 
 
-
-##  Disclaimer
+## Disclaimer
 
 > This project is for **educational purposes only**.
 > Kenjitsu API is an **unofficial** service and is **not affiliated** with any third-party providers.
 > The API does **not host, store, or distribute** any media content — all data belongs to its respective owners.
+
+
+

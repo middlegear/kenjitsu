@@ -26,7 +26,7 @@
   },
   "homepage": "https://github.com/middlegear/kenjitsu#readme",
   "devDependencies": {
-    "@types/node": "^24.10.9",
+    "@types/node": "^24.10.12",
     "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
@@ -35,9 +35,10 @@
     "@fastify/cors": "^11.2.0",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^8.3.0",
-    "dotenv": "^17.2.3",
-    "fastify": "^5.7.1",
+    "dotenv": "^17.2.4",
+    "fastify": "^5.7.4",
     "ioredis": "^5.9.2",
     "kenjitsu-extensions": "^1.0.0"
-  }
+  },
+  "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48"
 }
