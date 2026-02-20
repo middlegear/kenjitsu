@@ -5,14 +5,8 @@ FROM node:24-slim AS builder
 
 WORKDIR /app
 
-# Copy dependency manifests and npm config
-COPY package*.json tsconfig.json .npmrc ./
-
-# Configure npm for GitHub Packages (optional)
-ARG NPM_TOKEN
-RUN if [ -n "$NPM_TOKEN" ]; then \
-      npm config set //npm.pkg.github.com/:_authToken=$NPM_TOKEN; \
-    fi
+# Copy dependency manifests
+COPY package*.json tsconfig.json ./
 
 # Install dependencies
 RUN npm install
@@ -34,13 +28,7 @@ WORKDIR /app
 # Copy only build output and essentials
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
-COPY package*.json .npmrc ./
-
-# Configure npm again for GitHub Packages (optional)
-ARG NPM_TOKEN
-RUN if [ -n "$NPM_TOKEN" ]; then \
-      npm config set //npm.pkg.github.com/:_authToken=$NPM_TOKEN; \
-    fi
+COPY package*.json ./
 
 # Install only production dependencies
 RUN npm install --omit=dev
