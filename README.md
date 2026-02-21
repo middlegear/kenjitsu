@@ -18,7 +18,7 @@ A lightweight, high-performance Node.js API built with **Fastify** for deliverin
 Pull the latest image directly from GHCR:
 
 ```bash
-docker pull ghcr.io/middlegear/kenjitsu-api:latest
+docker pull ghcr.io/middlegear/kenjitsu:latest
 ```
 ### One-Click Deployment
 
