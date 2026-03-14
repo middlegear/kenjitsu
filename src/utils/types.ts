@@ -1,6 +1,7 @@
 export interface FastifyParams {
   id?: string;
   episodeId?: string;
+  date?: string;
   sort?: string;
   genre?: string;
   country?: string;
@@ -13,7 +14,6 @@ export interface FastifyParams {
 }
 
 export interface FastifyQuery {
-  score?: string;
   q?: string;
   year?: string;
   type?: string;

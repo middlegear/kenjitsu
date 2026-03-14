@@ -8,6 +8,7 @@ import {
   type FastifyQuery,
 } from '../../utils/types.js';
 import { redisSetCache, redisGetCache } from '../../middleware/cache.js';
+import { isValidDate } from '../../utils/utils.js';
 
 const anilist = new Anilist();
 
@@ -254,38 +255,51 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     }
   });
 
-  /// busted
-  // fastify.get('/schedule/airing', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-  //   reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
+  fastify.get(
+    '/airing/date/:date',
+    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
+      reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
 
-  //   const page = Number(request.query.page) || 1;
-  //   const score = Number(request.query.score) || 60;
+      const page = Number(request.query.page) || 1;
+      const perPage = Number(request.query.perPage) || 20;
+      const date = request.params.date;
+      const cacheKey = `anilist-schedule-${page}`;
 
-  //   const cacheKey = `anilist-schedule-${page}-${score}`;
-  //   const cachedData = await redisGetCache(cacheKey);
-  //   if (cachedData) {
-  //     return reply.status(200).send(cachedData);
-  //   }
+      if (!date) {
+        return reply.status(400).send({
+          error: "Missing required path parameter: 'date'.",
+        });
+      }
+      if (!isValidDate(date)) {
+        return reply.status(400).send({
+          error: 'Invalid date format. Expected YYYY-MM-DD.',
+        });
+      }
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) {
+        return reply.status(200).send(cachedData);
+      }
 
-  //   try {
-  //     const result = await anilist.fetchAiringSchedule(page, score);
-  //     if(result.error){
-  //       request.log.error({ result, page, score }, `External API Error: Failed to fetch airing schedule.`);
-  //       return reply.status(500).send(result);
-  //     }
+      try {
+        const result = await anilist.fetchAiringSchedule(date, page, perPage);
+        if (result.error) {
+          request.log.error({ result, page, date }, `External API Error: Failed to fetch airing schedule.`);
+          return reply.status(500).send(result);
+        }
 
-  //     if (result && Array.isArray(result.data) && result.data.length > 0) {
-  //       await redisSetCache(cacheKey, result, 6);
-  //     }
+        if (result && Array.isArray(result.data) && result.data.length > 0) {
+          await redisSetCache(cacheKey, result, 6);
+        }
 
-  //     return reply.status(200).send(result);
-  //   } catch (error) {
-  //     request.log.error({ error: error }, `Internal runtime error occurred while fetching airing schedule`);
-  //     return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
-  //   }
-  // });
+        return reply.status(200).send(result);
+      } catch (error) {
+        request.log.error({ error: error }, `Internal runtime error occurred while fetching airing schedule`);
+        return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+      }
+    },
+  );
 
-  fastify.get('/schedule/:id', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
+  fastify.get('/anime/schedule/:id', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
     reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
 
     const id = Number(request.params.id);

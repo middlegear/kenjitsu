@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Kaido, type HIGenre, type IAnimeCategory } from 'kenjitsu-extensions';
 import { IAnimeCategoryArr, type FastifyParams, type FastifyQuery } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
-import { splitEpisodes } from '../../utils/cache.js';
+import { splitEpisodes } from '../../utils/utils.js';
 
 const baseUrl = process.env.KAIDOURL || 'https://kaido.to';
 const zoro = new Kaido(baseUrl);
