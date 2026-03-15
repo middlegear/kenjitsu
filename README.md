@@ -22,7 +22,21 @@ docker pull ghcr.io/middlegear/kenjitsu:latest
 ```
 ### One-Click Deployment
 
-<p align="start"> <a href="https://vercel.com/new/clone?repository-url=https://github.com/middlegear/kenjitsu"> <img src="https://vercel.com/button" alt="Deploy with Vercel" height="42"> </a> &nbsp;&nbsp; <a href="https://app.koyeb.com/deploy?name=kenjitsu&type=git&repository=middlegear%2Fkenjitsu&branch=main&build_command=pnpm+install+%26%26+pnpm+build&run_command=pnpm+start&instance_type=free&regions=fra&instances_min=0&autoscaling_sleep_idle_delay=3900"> <img src="https://www.koyeb.com/static/images/deploy/button.svg" alt="Deploy to Koyeb" height="42"> </a> </p>
+Deploy using your preferred cloud provider:
+
+<p>
+  <a href="https://vercel.com/new/clone?repository-url=https://github.com/middlegear/kenjitsu">
+    <img src="https://vercel.com/button" alt="Deploy with Vercel" height="44">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://app.koyeb.com/deploy?name=kenjitsu&type=git&repository=middlegear%2Fkenjitsu&branch=main&build_command=pnpm+install+%26%26+pnpm+build&run_command=pnpm+start&instance_type=free&regions=fra&instances_min=0&autoscaling_sleep_idle_delay=3900">
+    <img src="https://www.koyeb.com/static/images/deploy/button.svg" alt="Deploy to Koyeb" height="42">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://render.com/deploy?repo=https://github.com/middlegear/kenjitsu">
+    <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" height="44">
+  </a>
+</p>
 
 ## Documentation
 
