@@ -263,7 +263,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       const page = Number(request.query.page) || 1;
       const perPage = Number(request.query.perPage) || 20;
       const date = request.params.date;
-      const cacheKey = `anilist-schedule-${page}`;
 
       if (!date) {
         return reply.status(400).send({
@@ -275,6 +274,8 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           error: 'Invalid date format. Expected YYYY-MM-DD.',
         });
       }
+
+      const cacheKey = `anilist-schedule-${date}-${page}-${perPage}`;
       const cachedData = await redisGetCache(cacheKey);
       if (cachedData) {
         return reply.status(200).send(cachedData);
