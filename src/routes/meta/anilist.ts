@@ -420,7 +420,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
-      const provider = (request.query.provider as 'hianime' | 'animepahe' | 'anizone') || 'hianime';
+      const provider = (request.query.provider as 'hianime' | 'animepahe' | 'anizone' | 'kaido') || 'hianime';
 
       if (isNaN(id)) {
         return reply.status(400).send({
@@ -453,8 +453,11 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           case 'anizone':
             result = await anilist.fetchAnizoneProviderId(id);
             break;
-          default:
+          case 'hianime':
             result = await anilist.fetchZoroProviderId(id);
+            break;
+          case 'kaido':
+            result = await anilist.fetchKaidoProviderId(id);
             break;
         }
         if (!result || typeof result !== 'object') {
@@ -496,7 +499,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       reply.header('Cache-Control', `public, s-maxage=${0.5 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
-      const provider = (request.query.provider as 'hianime' | 'animepahe' | 'anizone') || 'hianime';
+      const provider = (request.query.provider as 'hianime' | 'animepahe' | 'anizone' | 'kaido') || 'hianime';
 
       if (isNaN(id)) {
         return reply.status(400).send({
@@ -529,8 +532,11 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           case 'anizone':
             result = await anilist.fetchAnizoneProviderEpisodes(id);
             break;
-          default:
+          case 'hianime':
             result = await anilist.fetchZoroProviderEpisodes(id);
+            break;
+          case 'kaido':
+            result = await anilist.fetchKaidoProviderEpisodes(id);
             break;
         }
 
