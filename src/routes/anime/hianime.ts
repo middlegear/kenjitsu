@@ -1,12 +1,12 @@
 import 'dotenv/config';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { HiAnime, type HIGenre, type IAnimeCategory } from 'kenjitsu-extensions';
+import { Aniwatch, type HIGenre, type IAnimeCategory } from 'kenjitsu-extensions';
 import { IAnimeCategoryArr, type FastifyParams, type FastifyQuery } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
 import { splitEpisodes } from '../../utils/utils.js';
 
-const baseUrl = process.env.HIANIMEURL || 'https://hianime.to';
-const zoro = new HiAnime(baseUrl);
+const baseUrl = process.env.HIANIMEURL || 'https://aniwatchtv.to';
+const zoro = new Aniwatch(baseUrl);
 
 export default async function hianimeRoutes(fastify: FastifyInstance) {
   fastify.get('/home', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -524,7 +524,7 @@ export default async function hianimeRoutes(fastify: FastifyInstance) {
 
       const episodeId = String(request.params.episodeId);
       const version = (request.query.version as 'sub' | 'dub' | 'raw') || 'sub';
-      const server = (request.query.server as 'hd-1' | 'hd-2') || 'hd-2'; /// removed hd-3 cant support playback
+      const server = (request.query.server as 'vidsrc' | 'megacloud') || 'megacloud'; /// removed hd-3 cant support playback
 
       if (!episodeId) {
         return reply.status(400).send({
@@ -536,9 +536,9 @@ export default async function hianimeRoutes(fastify: FastifyInstance) {
           error: `Invalid version picked: '${version}'. Expected one of 'sub','dub','raw'.`,
         });
       }
-      if (!['hd-1', 'hd-2'].includes(server)) {
+      if (!['vidsrc', 'megacloud'].includes(server)) {
         return reply.status(400).send({
-          error: `Invalid  streaming server selected: '${server}'. Expected one of 'hd-1', 'hd-2'.`,
+          error: `Invalid  streaming server selected: '${server}'. Expected one of 'vidsrc', 'megacloud'.`,
         });
       }
       const cacheKey = `hianime-sources-${episodeId}-${version}-${server}`;

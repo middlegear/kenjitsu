@@ -27,8 +27,8 @@ importers:
         specifier: ^5.10.0
         version: 5.10.0
       kenjitsu-extensions:
-        specifier: ^1.2.0
-        version: 1.2.0
+        specifier: ^1.2.1
+        version: 1.2.1
     devDependencies:
       '@types/node':
         specifier: ^24.12.0
@@ -338,8 +338,8 @@ packages:
     resolution: {integrity: sha512-kfzR4zzQtAE9PC7CzZsjl3aBNbXWuXiSeOCdLcPpBfGW8YuCqQHcRPFDbr/BPVmd3EEPVpuFzLyuT/cUhPr4OQ==}
     engines: {node: '>=12.20'}
 
-  caniuse-lite@1.0.30001778:
-    resolution: {integrity: sha512-PN7uxFL+ExFJO61aVmP1aIEG4i9whQd4eoSCebav62UwDyp5OHh06zN4jqKSMePVgxHifCw1QJxdRkA1Pisekg==}
+  caniuse-lite@1.0.30001780:
+    resolution: {integrity: sha512-llngX0E7nQci5BPJDqoZSbuZ5Bcs9F5db7EtgfwBerX9XGtkkiO4NwfDDIRzHTTwcYC8vC7bmeUEPGrKlR/TkQ==}
 
   cheerio-select@2.1.0:
     resolution: {integrity: sha512-9v9kG0LvzrlcungtnJtpGNxY+fzECQKhK4EGJX2vByejiMX84MFNQw4UxPJl3bFbTMw+Dfs37XaIkCwTZfLh4g==}
@@ -570,8 +570,8 @@ packages:
   json-schema-traverse@1.0.0:
     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
 
-  kenjitsu-extensions@1.2.0:
-    resolution: {integrity: sha512-0ncQ6SernAEa5zvUAWujCJwcTVvlbqekqALiXy09KVFivhj4cMsU/JlvcQpxZYrfEc0tZr1w1Hn70alhx7HM9g==}
+  kenjitsu-extensions@1.2.1:
+    resolution: {integrity: sha512-warCXcDgHBA9HCryqA7wAr8ShJGWg98kho0SUdLgI+UjcbjPRVDxtpUwoYt+RsZYZGRpLNOGVEKFaI5lzzPjMA==}
 
   keyv@5.6.0:
     resolution: {integrity: sha512-CYDD3SOtsHtyXeEORYRx2qBtpDJFjRTGXUtmNEMGyzYOKj1TE3tycdlho7kA1Ufx9OYWZzg52QFBGALTirzDSw==}
@@ -825,8 +825,8 @@ packages:
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
-  undici@7.24.3:
-    resolution: {integrity: sha512-eJdUmK/Wrx2d+mnWWmwwLRyA7OQCkLap60sk3dOK4ViZR7DKwwptwuIvFBg2HaiP9ESaEdhtpSymQPvytpmkCA==}
+  undici@7.24.4:
+    resolution: {integrity: sha512-BM/JzwwaRXxrLdElV2Uo6cTLEjhSb3WXboncJamZ15NgUURmvlXvxa6xkwIOILIjPNo9i8ku136ZvWV0Uly8+w==}
     engines: {node: '>=20.18.1'}
 
   update-browserslist-db@1.2.3:
@@ -1045,7 +1045,7 @@ snapshots:
   browserslist@4.28.1:
     dependencies:
       baseline-browser-mapping: 2.10.8
-      caniuse-lite: 1.0.30001778
+      caniuse-lite: 1.0.30001780
       electron-to-chromium: 1.5.313
       node-releases: 2.0.36
       update-browserslist-db: 1.2.3(browserslist@4.28.1)
@@ -1068,7 +1068,7 @@ snapshots:
 
   callsites@4.2.0: {}
 
-  caniuse-lite@1.0.30001778: {}
+  caniuse-lite@1.0.30001780: {}
 
   cheerio-select@2.1.0:
     dependencies:
@@ -1090,7 +1090,7 @@ snapshots:
       parse5: 7.3.0
       parse5-htmlparser2-tree-adapter: 7.1.0
       parse5-parser-stream: 7.1.2
-      undici: 7.24.3
+      undici: 7.24.4
       whatwg-mimetype: 4.0.0
 
   cluster-key-slot@1.1.2: {}
@@ -1379,7 +1379,7 @@ snapshots:
 
   json-schema-traverse@1.0.0: {}
 
-  kenjitsu-extensions@1.2.0:
+  kenjitsu-extensions@1.2.1:
     dependencies:
       cheerio: 1.2.0
       got-scraping: 4.2.1
@@ -1585,7 +1585,7 @@ snapshots:
 
   undici-types@7.16.0: {}
 
-  undici@7.24.3: {}
+  undici@7.24.4: {}
 
   update-browserslist-db@1.2.3(browserslist@4.28.1):
     dependencies:
