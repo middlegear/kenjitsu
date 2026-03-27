@@ -29,8 +29,8 @@ export interface FastifyQuery {
   quality?: string;
 }
 export type BrowserName = 'firefox' | 'chrome';
-export type DeviceType = 'desktop'| 'mobile'
-export type OperatingSystem = 'windows'| 'ios'|'android'
+export type DeviceType = 'desktop' | 'mobile';
+export type OperatingSystem = 'windows' | 'ios' | 'android';
 export type Locale = (typeof Locales)[number];
 
 export const IAMetaFormatArr = ['TV', 'MOVIE', 'SPECIAL', 'OVA', 'ONA', 'MUSIC', 'MANGA'] as const;
@@ -39,16 +39,13 @@ export const IAnimeCategoryArr = ['TV', 'MOVIE', 'SPECIALS', 'OVA', 'ONA'] as co
 
 export const IAnimeSeasonsArr = ['WINTER', 'SPRING', 'SUMMER', 'FALL'] as const;
 
-
 const Locales = [
-
   'en-US',
   'en-CA',
   'es-MX',
   'pt-BR',
   'es-US',
   'fr-CA',
-
 
   'en-GB',
   'de-DE',
@@ -62,7 +59,6 @@ const Locales = [
   'de-AT',
   'nl-BE',
   'fr-BE',
-
 
   'ru-RU',
   'pl-PL',
@@ -100,7 +96,7 @@ const Locales = [
   'en-ZA',
   'ar-AE',
 ];
-export const allowedProviders = ['hianime', 'animepahe', 'anizone', 'kaido'];
+export const allowedProviders = ['hianime', 'animepahe', 'anizone', 'kaido', 'animekai'];
 
 export interface ClientConfig {
   /**
