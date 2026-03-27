@@ -413,9 +413,9 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       }
     },
   );
-  //// should add anime here and update saikou tv
+
   fastify.get(
-    '/mappings/:id',
+    '/anime/mappings/:id',
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -454,7 +454,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
             result = await anilist.fetchAnizoneProviderId(id);
             break;
           case 'hianime':
-            result = await anilist.fetchZoroProviderId(id);
+            result = await anilist.fetchAniwatchProviderId(id);
             break;
           case 'kaido':
             result = await anilist.fetchKaidoProviderId(id);
@@ -527,13 +527,13 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         let result;
         switch (provider) {
           case 'animepahe':
-            result = await anilist.fetchAnimePaheProviderEpisodes(id);
+            result = await anilist.fetchAnimepaheProviderEpisodes(id);
             break;
           case 'anizone':
             result = await anilist.fetchAnizoneProviderEpisodes(id);
             break;
           case 'hianime':
-            result = await anilist.fetchZoroProviderEpisodes(id);
+            result = await anilist.fetchAniwatchProviderEpisodes(id);
             break;
           case 'kaido':
             result = await anilist.fetchKaidoProviderEpisodes(id);

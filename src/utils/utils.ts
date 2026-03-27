@@ -1,3 +1,4 @@
+
 interface ProviderEpisode {
   title: string | null;
   hasSub: boolean;
@@ -32,3 +33,4 @@ export function isValidDate(dateString: string): boolean {
 
   return date.toISOString().startsWith(dateString);
 }
+

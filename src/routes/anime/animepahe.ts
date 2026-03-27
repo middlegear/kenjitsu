@@ -3,9 +3,10 @@ import { Animepahe } from 'kenjitsu-extensions';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
+import { clientOptions } from '../../config/client.js';
 
 const baseUrl = process.env.ANIMEPAHEURL || 'https://animepahe.si';
-const animepahe = new Animepahe(baseUrl);
+const animepahe = new Animepahe(clientOptions, baseUrl);
 
 export default async function AnimepaheRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
@@ -44,7 +45,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/episodes/recent', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
 
     const page = request.query.page || 1;
 
@@ -85,7 +86,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
     if (!id) {
       return reply.status(400).send({
-        error: `Missing required path paramater: 'id'`,
+        error: `Missing required path parameter: 'id'`,
       });
     }
     let duration;
@@ -133,7 +134,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
     if (!id) {
       return reply.status(400).send({
-        error: `Missing required path paramater: 'id'`,
+        error: `Missing required path parameter: 'id'`,
       });
     }
 
@@ -176,7 +177,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
       if (!episodeId) {
         return reply.status(400).send({
-          error: `Missing required path paramater: 'episodeId'`,
+          error: `Missing required path parameter: 'episodeId'`,
         });
       }
 
@@ -227,7 +228,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
       }
       if (!episodeId) {
         return reply.status(400).send({
-          error: `Missing required path paramater: 'episodeId'`,
+          error: `Missing required path parameter: 'episodeId'`,
         });
       }
       const cacheKey = `animepahe-sources-${episodeId}-${version}`;

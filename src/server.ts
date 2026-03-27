@@ -14,6 +14,7 @@ import FlixHQRoutes from './routes/movies/flixhq.js';
 import { ratelimitOptions, rateLimitPlugIn } from './config/ratelimit.js';
 import fastifyCors, { corsOptions } from './config/cors.js';
 import { checkRedis } from './config/redis.js';
+import AnimekaiRoutes from './routes/anime/animekai.js';
 
 events.defaultMaxListeners = 25;
 
@@ -75,6 +76,7 @@ async function FastifyApp() {
   await app.register(StaticRoutes);
   await app.register(AnilistRoutes, { prefix: '/api/anilist' });
   await app.register(HianimeRoutes, { prefix: '/api/hianime' });
+  await app.register(AnimekaiRoutes, { prefix: '/api/animekai' });
   await app.register(KaidoRoutes, { prefix: '/api/kaido' });
   await app.register(AnimepaheRoutes, { prefix: '/api/animepahe' });
   await app.register(AnizoneRoutes, { prefix: '/api/anizone' });

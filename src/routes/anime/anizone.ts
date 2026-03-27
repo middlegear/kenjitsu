@@ -3,9 +3,10 @@ import { Anizone } from 'kenjitsu-extensions';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
+import { clientOptions } from '../../config/client.js';
 
 const baseUrl = process.env.ANIZONEURL || 'https://anizone.to';
-const anizone = new Anizone(baseUrl);
+const anizone = new Anizone(clientOptions, baseUrl);
 
 export default async function AnizoneRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
@@ -40,7 +41,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/anime/recent', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
 
     const cacheKey = `anizone-updates`;
     const cachedData = await redisGetCache(cacheKey);
@@ -74,7 +75,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
 
     if (!id) {
       return reply.status(400).send({
-        error: `Missing required path paramater: 'id'`,
+        error: `Missing required path parameter: 'id'`,
       });
     }
     let duration;
@@ -124,7 +125,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
 
       if (!episodeId) {
         return reply.status(400).send({
-          error: `Missing required path paramater: 'episodeId'`,
+          error: `Missing required path parameter: 'episodeId'`,
         });
       }
       const cacheKey = `anizone-sources-${episodeId}`;
@@ -147,7 +148,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
         }
 
         if (result.data && Array.isArray(result.data.sources) && result.data.sources.length > 0) {
-          redisSetCache(cacheKey, result, 4);
+         await redisSetCache(cacheKey, result, 4);
         }
 
         return reply.status(200).send(result);

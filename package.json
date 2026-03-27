@@ -1,6 +1,6 @@
 {
   "name": "kenjitsu",
-  "version": "1.0.0",
+  "version": "0.0.0-development",
   "description": "A lightweight API that serves metadata and video sources from popular streaming sites.",
   "main": "src/server.ts",
   "type": "module",
@@ -19,6 +19,22 @@
     "movies",
     "tv"
   ],
+  "release": {
+    "branches": [
+      "main"
+    ],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      [
+        "@semantic-release/npm",
+        {
+          "npmPublish": false
+        }
+      ],
+      "@semantic-release/github"
+    ]
+  },
   "author": "middlegear",
   "license": "MIT",
   "bugs": {
@@ -26,8 +42,11 @@
   },
   "homepage": "https://github.com/middlegear/kenjitsu#readme",
   "devDependencies": {
+    "@semantic-release/github": "^12.0.6",
+    "@semantic-release/npm": "^13.1.5",
     "@types/node": "^24.12.0",
     "prettier": "^3.8.1",
+    "semantic-release": "^25.0.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
@@ -36,9 +55,9 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^8.3.0",
     "dotenv": "^17.3.1",
-    "fastify": "^5.8.2",
-    "ioredis": "^5.10.0",
-    "kenjitsu-extensions": "^1.2.2"
+    "fastify": "^5.8.4",
+    "ioredis": "^5.10.1",
+    "kenjitsu-extensions": "^1.3.0"
   },
   "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48"
 }
