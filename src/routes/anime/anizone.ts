@@ -3,10 +3,9 @@ import { Anizone } from 'kenjitsu-extensions';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
-import { clientOptions } from '../../config/client.js';
 
 const baseUrl = process.env.ANIZONEURL || 'https://anizone.to';
-const anizone = new Anizone(clientOptions, baseUrl);
+const anizone = new Anizone({}, baseUrl);
 
 export default async function AnizoneRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
@@ -148,7 +147,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
         }
 
         if (result.data && Array.isArray(result.data.sources) && result.data.sources.length > 0) {
-         await redisSetCache(cacheKey, result, 4);
+          await redisSetCache(cacheKey, result, 4);
         }
 
         return reply.status(200).send(result);

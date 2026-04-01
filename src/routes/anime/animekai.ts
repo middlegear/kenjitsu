@@ -5,10 +5,9 @@ import { IAMetaFormatArr, IAnimeCategoryArr, type FastifyParams, type FastifyQue
 import { Animekai, type IAnimeCategory, type IMetaFormat } from 'kenjitsu-extensions';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
 import { splitEpisodes } from '../../utils/utils.js';
-import { clientOptions } from '../../config/client.js';
 
 const baseUrl = process.env.ANIMEKAIURL || 'https://anikai.to';
-const animekai = new Animekai(clientOptions, baseUrl);
+const animekai = new Animekai({}, baseUrl);
 
 export default async function AnimekaiRoutes(fastify: FastifyInstance) {
   fastify.get('/home', async (request: FastifyRequest, reply: FastifyReply) => {

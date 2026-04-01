@@ -4,10 +4,9 @@ import { Aniwatch, type HIGenre, type IAnimeCategory } from 'kenjitsu-extensions
 import { IAnimeCategoryArr, type FastifyParams, type FastifyQuery } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
 import { splitEpisodes } from '../../utils/utils.js';
-import { clientOptions } from '../../config/client.js';
 
 const baseUrl = process.env.HIANIMEURL || 'https://aniwatchtv.to';
-const zoro = new Aniwatch(clientOptions, baseUrl);
+const zoro = new Aniwatch({}, baseUrl);
 
 export default async function hianimeRoutes(fastify: FastifyInstance) {
   fastify.get('/home', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -111,7 +110,6 @@ export default async function hianimeRoutes(fastify: FastifyInstance) {
     if (!id) {
       return reply.status(400).send({ error: 'Missing required path parameter: id' });
     }
-
 
     const cacheKey = `zoro-info-${id}`;
     const cachedData = await redisGetCache(cacheKey);

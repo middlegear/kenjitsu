@@ -3,10 +3,9 @@ import { Animepahe } from 'kenjitsu-extensions';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
-import { clientOptions } from '../../config/client.js';
 
 const baseUrl = process.env.ANIMEPAHEURL || 'https://animepahe.si';
-const animepahe = new Animepahe(clientOptions, baseUrl);
+const animepahe = new Animepahe({}, baseUrl);
 
 export default async function AnimepaheRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
