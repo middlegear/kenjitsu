@@ -6,7 +6,7 @@ import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
 import { splitEpisodes } from '../../utils/utils.js';
 
 const baseUrl = process.env.KAIDOURL || 'https://kaido.to';
-const zoro = new Kaido({}, baseUrl);
+const zoro = new Kaido(baseUrl);
 
 export default async function KaidoRoutes(fastify: FastifyInstance) {
   fastify.get('/home', async (request: FastifyRequest, reply: FastifyReply) => {

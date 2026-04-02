@@ -5,7 +5,7 @@ import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
 
 const baseUrl = process.env.ANIMEPAHEURL || 'https://animepahe.si';
-const animepahe = new Animepahe({}, baseUrl);
+const animepahe = new Animepahe(baseUrl);
 
 export default async function AnimepaheRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {

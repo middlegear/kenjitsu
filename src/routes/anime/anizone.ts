@@ -5,7 +5,7 @@ import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
 
 const baseUrl = process.env.ANIZONEURL || 'https://anizone.to';
-const anizone = new Anizone({}, baseUrl);
+const anizone = new Anizone(baseUrl);
 
 export default async function AnizoneRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {

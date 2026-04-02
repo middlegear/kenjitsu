@@ -3,10 +3,9 @@ import { HiMovies, type IMovieGenre, type IMovieCountry } from 'kenjitsu-extensi
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyParams, FastifyQuery } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
-import { clientOptions } from '../../config/client.js';
 
 const baseUrl = process.env.HIMOVIESURL || 'https://himovies.sx';
-const himovies = new HiMovies(clientOptions, baseUrl);
+const himovies = new HiMovies(baseUrl);
 
 export default async function himoviesRoutes(fastify: FastifyInstance) {
   fastify.get('/home', async (request: FastifyRequest, reply: FastifyReply) => {

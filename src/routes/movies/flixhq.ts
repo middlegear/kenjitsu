@@ -3,10 +3,9 @@ import { FlixHQ } from 'kenjitsu-extensions';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyParams, FastifyQuery } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
-import { clientOptions } from '../../config/client.js';
 
 const baseUrl = process.env.FLIXHQURL || 'https://flixhq.to';
-const flixhq = new FlixHQ(clientOptions, baseUrl);
+const flixhq = new FlixHQ(baseUrl);
 
 export default async function FlixHQRoutes(fastify: FastifyInstance) {
   fastify.get('/home', async (request: FastifyRequest, reply: FastifyReply) => {
