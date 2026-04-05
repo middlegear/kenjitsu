@@ -170,7 +170,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/episode/:episodeId/servers',
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
 
       const episodeId = request.params.episodeId;
 
@@ -193,15 +193,8 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
           return reply.status(500).send(result);
         }
 
-        if (!result || typeof result !== 'object') {
-          request.log.warn({ episodeId, result }, 'External provider returned null/undefined');
-          return reply.status(502).send({
-            error: 'External provider returned an invalid response(null)',
-          });
-        }
-
-        if (result && typeof result === 'object' && result.data !== null) {
-          await redisSetCache(cacheKey, result, 12);
+        if (result && typeof result === 'object' && result.data?.episodeNumber !== 0) {
+          await redisSetCache(cacheKey, result, 1);
         }
         return reply.status(200).send(result);
       } catch (error) {
