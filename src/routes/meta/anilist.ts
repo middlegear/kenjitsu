@@ -481,7 +481,8 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           result.provider !== null &&
           status === 'finished' &&
           data.episodes !== null &&
-          format !== 'movie'
+          format !== 'movie' &&
+          provider !== 'animepahe'
         ) {
           await redisSetCache(cacheKey, result, 0);
         }
@@ -560,7 +561,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         const isNotMovie = format !== 'movie';
         const isComplete = episodesFound >= episodesExpected && episodesExpected !== null;
 
-        if (isFinished && isNotMovie && isComplete) {
+        if (isFinished && isNotMovie && isComplete && provider !== 'animepahe') {
           await redisSetCache(cacheKey, result, 0);
         }
         return reply.status(200).send(result);
