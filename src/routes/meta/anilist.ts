@@ -314,7 +314,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         error: "Missing required path parameter: 'id'.",
       });
     }
-    const cacheKey = `anilist-media-schedule-${anilist}`;
+    const cacheKey = `anilist-media-schedule-${id}`;
     const cachedData = await redisGetCache(cacheKey);
     if (cachedData) {
       return reply.status(200).send(cachedData);
