@@ -57,6 +57,8 @@
     "@fastify/cors": "^11.2.0",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^8.3.0",
+    "axios": "^1.16.1",
+    "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",
     "fastify": "^5.8.5",
     "ioredis": "^5.10.1",
