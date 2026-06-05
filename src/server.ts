@@ -6,6 +6,7 @@ import StaticRoutes from './routes/static.js';
 import AnimepaheRoutes from './routes/anime/animepahe.js';
 import AnizoneRoutes from './routes/anime/anizone.js';
 import AnilistRoutes from './routes/meta/anilist.js';
+import AnikotoRoutes from './routes/anime/anikoto.js';
 
 import { ratelimitOptions, rateLimitPlugIn } from './config/ratelimit.js';
 import fastifyCors, { corsOptions } from './config/cors.js';
@@ -22,7 +23,6 @@ const app = Fastify({
         url: req.url,
         query: req.query,
         params: req.params,
-
         headers: {
           'user-agent': req.headers['user-agent'],
           host: req.headers['host'],
@@ -55,9 +55,7 @@ async function FastifyApp() {
       reply.header('Surrogate-Control', 'no-store');
     }
 
-    /// remove rate limit headers since plugin doesnt work
     if (status === 200) {
-      // reply.removeHeader('x-ratelimit-limit');
       reply.removeHeader('x-ratelimit-remaining');
       reply.removeHeader('x-ratelimit-reset');
     }
@@ -72,6 +70,7 @@ async function FastifyApp() {
   await app.register(AnilistRoutes, { prefix: '/api/anilist' });
   await app.register(AnimepaheRoutes, { prefix: '/api/animepahe' });
   await app.register(AnizoneRoutes, { prefix: '/api/anizone' });
+  await app.register(AnikotoRoutes, { prefix: '/api/anikoto' });
 
   try {
     const port = parseInt(process.env.PORT || '3000', 10);
