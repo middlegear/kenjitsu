@@ -1,13 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Anilist, type Seasons, type IMetaFormat } from 'kenjitsu-extensions';
 import {
-  allowedProviders,
+  allowedAnimeProviders,
   IAMetaFormatArr,
   IAnimeSeasonsArr,
   type FastifyParams,
   type FastifyQuery,
 } from '../../utils/types.js';
-import { redisSetCache, redisGetCache } from '../../middleware/cache.js';
+import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
 import { isValidDate } from '../../utils/utils.js';
 
 const anilist = new Anilist();
@@ -30,15 +30,13 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       const result = await anilist.search(q, 'ANIME', page, perPage);
 
       if (!result || typeof result !== 'object') {
-        request.log.warn({ q, page, perPage, result }, 'External provider returned null/undefined');
         return reply.status(502).send({
           error: 'External provider returned an invalid response(null)',
         });
       }
 
       if (result.error) {
-        request.log.error({ result, q, page, perPage }, `External API Error: Failed to fetch search results`);
-        return reply.status(500).send(result);
+        return reply.status(result.status as number).send({ error: result.error });
       }
 
       if (result && Array.isArray(result.data) && result.data.length > 0) {
@@ -47,8 +45,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send(result);
     } catch (error) {
-      request.log.error({ error: error }, `Internal runtime error occurred while querying search results`);
-      return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+      return reply.status(500).send(error);
     }
   });
 
@@ -72,14 +69,12 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       const result = await anilist.fetchInfo(id, 'ANIME');
 
       if (!result || typeof result !== 'object') {
-        request.log.warn({ id, result }, 'External provider returned null/undefined');
         return reply.status(502).send({
           error: 'External provider returned an invalid response(null)',
         });
       }
       if (result.error) {
-        request.log.error({ result, id }, `External API Error: Failed to fetch animeinfo `);
-        return reply.status(500).send(result);
+        return reply.status(result.status as number).send({ error: result.error });
       }
 
       if (result && result.data !== null) {
@@ -89,8 +84,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send(result);
     } catch (error) {
-      request.log.error({ error: error }, `Internal runtime error occurred while fetching animeinfo`);
-      return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+      return reply.status(500).send(error);
     }
   });
 
@@ -148,16 +142,18 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           case 'popular':
             result = await anilist.fetchMostPopular('ANIME', 'TV', page, perPage);
             break;
+          default:
+            return reply.status(400).send({
+              error: `Invalid type: '${category}'. Expected 'airing' , 'upcoming' , 'trending', 'popular' or 'rating'.`,
+            });
         }
         if (!result || typeof result !== 'object') {
-          request.log.warn({ category, result }, 'External provider returned null/undefined');
           return reply.status(502).send({
             error: 'External provider returned an invalid response(null)',
           });
         }
         if (result.error) {
-          request.log.error({ result, page, perPage }, `External API Error: Failed to fetch top animelist `);
-          return reply.status(500).send(result);
+          return reply.status(result.status as number).send({ error: result.error });
         }
 
         let duration = category === 'airing' || category === 'trending' || category === 'upcoming' ? 24 : 336; //lol remember to swap this around
@@ -168,8 +164,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
         return reply.status(200).send(result);
       } catch (error) {
-        request.log.error({ error: error }, `Internal runtime error occurred while fetching top animelist`);
-        return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+        return reply.status(500).send(error);
       }
     },
   );
@@ -194,14 +189,12 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     try {
       const result = await anilist.fetchCharacters(Number(id));
       if (!result || typeof result !== 'object') {
-        request.log.warn({ id, result }, 'External provider returned null/undefined');
         return reply.status(502).send({
           error: 'External provider returned an invalid response(null)',
         });
       }
       if (result.error) {
-        request.log.error({ result, id }, `External API Error: Failed to fetch characters `);
-        return reply.status(500).send(result);
+        return reply.status(result.status as number).send({ error: result.error });
       }
 
       if (result && result.data !== null) {
@@ -210,7 +203,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send(result);
     } catch (error) {
-      request.log.error({ error: error }, `Internal runtime error occurred while fetching characters`);
       return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
     }
   });
@@ -234,14 +226,12 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     try {
       const result = await anilist.fetchRelatedAnime(Number(id));
       if (!result || typeof result !== 'object') {
-        request.log.warn({ id, result }, 'External provider returned null/undefined');
         return reply.status(502).send({
           error: 'External provider returned an invalid response(null)',
         });
       }
       if (result.error) {
-        request.log.error({ result, id }, `External API Error: Failed to fetch related anime.`);
-        return reply.status(500).send(result);
+        return reply.status(result.status as number).send({ error: result.error });
       }
 
       if (result && Array.isArray(result.data) && result.data.length > 0) {
@@ -250,7 +240,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send(result);
     } catch (error) {
-      request.log.error({ error: error }, `Internal runtime error occurred while fetching related anime`);
       return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
     }
   });
@@ -284,8 +273,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       try {
         const result = await anilist.fetchAiringSchedule(date, page, perPage);
         if (result.error) {
-          request.log.error({ result, page, date }, `External API Error: Failed to fetch airing schedule.`);
-          return reply.status(500).send(result);
+          return reply.status(result.status as number).send(result);
         }
 
         if (result && Array.isArray(result.data) && result.data.length > 0) {
@@ -294,12 +282,10 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
         return reply.status(200).send(result);
       } catch (error) {
-        request.log.error({ error: error }, `Internal runtime error occurred while fetching airing schedule`);
-        return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+        return reply.status(500).send(error);
       }
     },
   );
-
   fastify.get('/anime/schedule/:id', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
     reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -323,14 +309,12 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     try {
       const result = await anilist.fetchMediaSchedule(id);
       if (!result || typeof result !== 'object') {
-        request.log.warn({ id, result }, 'External provider returned null/undefined');
         return reply.status(502).send({
           error: 'External provider returned an invalid response(null)',
         });
       }
       if (result.error) {
-        request.log.error({ result, id }, `External API Error: Failed to fetch media schedule.`);
-        return reply.status(500).send(result);
+        return reply.status(result.status as number).send({ error: result.error });
       }
 
       if (result && result.data !== null) {
@@ -339,8 +323,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send(result);
     } catch (error) {
-      request.log.error({ error: error }, `Internal runtime error occurred while fetching media schedule`);
-      return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+      return reply.status(500).send(error);
     }
   });
 
@@ -389,17 +372,12 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       try {
         const result = await anilist.fetchSeasonalAnime(season, year, page, perPage, format);
         if (!result || typeof result !== 'object') {
-          request.log.warn({ season, year, page, perPage, result }, 'External provider returned null/undefined');
           return reply.status(502).send({
             error: 'External provider returned an invalid response(null)',
           });
         }
         if (result.error) {
-          request.log.error(
-            { result, season, year, page, perPage, format },
-            `External API Error: Failed to fetch season list.`,
-          );
-          return reply.status(500).send(result);
+          return reply.status(result.status as number).send({ error: result.error });
         }
 
         if (result && Array.isArray(result.data) && result.data.length > 0) {
@@ -408,8 +386,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
         return reply.status(200).send(result);
       } catch (error) {
-        request.log.error({ error: error }, `Internal runtime error occurred while fetching season lists`);
-        return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+        return reply.status(500).send(error);
       }
     },
   );
@@ -420,7 +397,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
-      const provider = (request.query.provider as 'animekai' | 'animepahe' | 'anizone') || 'animepahe';
+      const provider = (request.query.provider as 'anikoto' | 'animepahe' | 'anizone') || 'anikoto';
 
       if (isNaN(id)) {
         return reply.status(400).send({
@@ -432,9 +409,9 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if (!allowedProviders.includes(provider)) {
+      if (!allowedAnimeProviders.includes(provider)) {
         return reply.status(400).send({
-          error: `Invalid provider '${provider}'. Expected one of: ${allowedProviders.join(', ')}`,
+          error: `Invalid provider '${provider}'. Expected one of: ${allowedAnimeProviders.join(', ')}`,
         });
       }
 
@@ -453,19 +430,21 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           case 'anizone':
             result = await anilist.fetchAnizoneProviderId(id);
             break;
-          case 'animekai':
-            result = await anilist.fetchAnimeKaiProviderId(id);
+          case 'anikoto':
+            result = await anilist.fetchAnikotoProviderId(id);
             break;
+          default:
+            return reply.status(400).send({
+              error: `Invalid provider '${provider}'. Expected one of: ${allowedAnimeProviders.join(', ')}`,
+            });
         }
         if (!result || typeof result !== 'object') {
-          request.log.warn({ id, provider, result }, 'External provider returned null/undefined');
           return reply.status(502).send({
             error: 'External provider returned an invalid response(null)',
           });
         }
         if (result.error || result.data === null || result.provider === null) {
-          request.log.error({ result, id, provider }, `External API Error: Failed to fetch provider info.`);
-          return reply.status(500).send(result);
+          return reply.status(result.status as number).send({ error: result.error });
         }
 
         const data = result?.data;
@@ -485,8 +464,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         }
         return reply.status(200).send(result);
       } catch (error) {
-        request.log.error({ error: error }, `Internal runtime error occurred while fetching provider info`);
-        return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+        return reply.status(500).send(error);
       }
     },
   );
@@ -497,7 +475,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       reply.header('Cache-Control', `public, s-maxage=${0.5 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
-      const provider = (request.query.provider as 'animepahe' | 'anizone') || 'animepahe';
+      const provider = (request.query.provider as 'anikoto' | 'animepahe' | 'anizone') || 'anikoto';
 
       if (isNaN(id)) {
         return reply.status(400).send({
@@ -509,9 +487,9 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if (!allowedProviders.includes(provider)) {
+      if (!allowedAnimeProviders.includes(provider)) {
         return reply.status(400).send({
-          error: `Invalid provider '${provider}'. Expected one of: ${allowedProviders.join(', ')}`,
+          error: `Invalid provider '${provider}'. Expected one of: ${allowedAnimeProviders.join(', ')}`,
         });
       }
 
@@ -530,17 +508,22 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           case 'anizone':
             result = await anilist.fetchAnizoneProviderEpisodes(id);
             break;
+          case 'anikoto':
+            result = await anilist.fetchAnikotoProviderEpisodes(id);
+            break;
+          default:
+            return reply.status(400).send({
+              error: `Invalid provider '${provider}'. Expected one of: ${allowedAnimeProviders.join(', ')}`,
+            });
         }
 
         if (!result || typeof result !== 'object') {
-          request.log.warn({ id, provider, result }, 'External provider returned null/undefined');
           return reply.status(502).send({
             error: 'External provider returned an invalid response(null)',
           });
         }
         if (result.error || result.data === null || result.providerEpisodes.length === 0) {
-          request.log.error({ result, id, provider }, `External API Error: Failed to fetch provider episodes.`);
-          return reply.status(500).send(result);
+          return reply.status(result.status as number).send({ error: result.error });
         }
 
         const status = result?.data?.status?.toLowerCase();
@@ -552,13 +535,14 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         const isNotMovie = format !== 'movie';
         const isComplete = episodesFound >= episodesExpected && episodesExpected !== null;
 
-        if (isFinished && isNotMovie && isComplete && provider !== 'animepahe') {
-          await redisSetCache(cacheKey, result, 0);
+        let duration;
+        isFinished ? (duration = 0) : 1.5;
+        if (isFinished && result.data !== null && isNotMovie && isComplete && provider !== 'animepahe') {
+          await redisSetCache(cacheKey, result, duration);
         }
         return reply.status(200).send(result);
       } catch (error) {
-        request.log.error({ error: error }, `Internal runtime error occurred while fetching provider episodes`);
-        return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+        return reply.status(500).send(error);
       }
     },
   );

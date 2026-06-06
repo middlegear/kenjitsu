@@ -1,472 +1,490 @@
 import 'dotenv/config';
+import { Anikoto, type IAnimeCategory, type IMetaFormat } from 'kenjitsu-extensions';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import axios from 'axios';
+import { type FastifyQuery, type FastifyParams, IAnimeCategoryArr } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../middleware/cache.js';
-import { ANIKOTO_DEFAULT_HEADERS, ANIKOTO_FILTER_OPTIONS } from '../../lib/anikoto/constants.js';
-import { scrapeHome } from '../../lib/anikoto/scrapers/home.scraper.js';
-import { scrapeAnimeDetail, scrapeAnimeEpisodes } from '../../lib/anikoto/scrapers/anime.scraper.js';
-import { scrapeSearch, scrapeFilter, scrapeListingPage } from '../../lib/anikoto/scrapers/search.scraper.js';
-import { scrapeSchedule } from '../../lib/anikoto/scrapers/schedule.scraper.js';
-import { scrapeWatch } from '../../lib/anikoto/scrapers/watch.scraper.js';
-import type { FilterParams } from '../../lib/anikoto/types.js';
 
-// TTL values in hours (to match existing Kenjitsu caching pattern)
-const TTL = {
-  HOME: 5 / 60,       // 5 min
-  ANIME: 0.5,         // 30 min
-  EPISODE: 10 / 60,   // 10 min
-  SEARCH: 2 / 60,     // 2 min
-  FILTER: 5 / 60,     // 5 min
-  SCHEDULE: 1,        // 1 hour
-};
-
-interface FastifyQuery {
-  q?: string;
-  keyword?: string;
-  page?: string;
-  refresh?: string;
-  start?: string;
-  end?: string;
-  ep?: string;
-  type?: string;
-  sort?: string;
-  'genre[]'?: string | string[];
-  'season[]'?: string | string[];
-  'year[]'?: string | string[];
-  'type[]'?: string | string[];
-  'status[]'?: string | string[];
-  'language[]'?: string | string[];
-  'rating[]'?: string | string[];
-  url?: string;
-  referer?: string;
-}
-
-interface FastifyParams {
-  slug?: string;
-  genre?: string;
-  mediaType?: string;
-}
-
-function toArray(val: string | string[] | undefined): string[] {
-  if (!val) return [];
-  return Array.isArray(val) ? val : [val];
-}
+const baseUrl = process.env.ANIKOTOURL || 'https://anikototv.to';
+const anikoto = new Anikoto(baseUrl);
 
 export default async function AnikotoRoutes(fastify: FastifyInstance) {
-  // ─── Home ────────────────────────────────────────────────────────────────
-  fastify.get('/home', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${5 * 60}, stale-while-revalidate=60`);
-
-    const refresh = request.query.refresh === '1';
-    const cacheKey = 'anikoto:home';
-    const cached = await redisGetCache(cacheKey);
-    if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
+  fastify.get('/home', async (request: FastifyRequest, reply: FastifyReply) => {
+    reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
 
     try {
-      const data = await scrapeHome();
-      await redisSetCache(cacheKey, data, TTL.HOME);
-      return reply.status(200).send({ ok: true, data });
-    } catch (error) {
-      request.log.error({ error }, 'Anikoto: failed to scrape home');
-      return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
-    }
-  });
-
-  // ─── Search ───────────────────────────────────────────────────────────────
-  fastify.get('/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${2 * 60}, stale-while-revalidate=60`);
-
-    const keyword = (request.query.keyword ?? request.query.q ?? '').trim();
-    const refresh = request.query.refresh === '1';
-
-    if (!keyword) {
-      return reply.status(400).send({ ok: false, message: 'keyword query parameter is required' });
-    }
-    if (keyword.length > 500) {
-      return reply.status(400).send({ ok: false, message: 'keyword too long' });
-    }
-
-    const cacheKey = `anikoto:search:${keyword.toLowerCase()}`;
-    const cached = await redisGetCache(cacheKey);
-    if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
-
-    try {
-      const data = await scrapeSearch(keyword);
-      if (data.results.length > 0) await redisSetCache(cacheKey, data, TTL.SEARCH);
-      return reply.status(200).send({ ok: true, data });
-    } catch (error) {
-      request.log.error({ error }, 'Anikoto: failed to scrape search');
-      return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
-    }
-  });
-
-  // ─── Filter ───────────────────────────────────────────────────────────────
-  fastify.get('/filter', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${5 * 60}, stale-while-revalidate=60`);
-
-    const refresh = request.query.refresh === '1';
-    const rawQuery = request.query;
-
-    const params: FilterParams = {
-      keyword: (rawQuery.keyword as string | undefined) ?? undefined,
-      genre: toArray(rawQuery['genre[]'] as string | string[] | undefined),
-      season: toArray(rawQuery['season[]'] as string | string[] | undefined),
-      year: toArray(rawQuery['year[]'] as string | string[] | undefined),
-      type: toArray(rawQuery['type[]'] as string | string[] | undefined),
-      status: toArray(rawQuery['status[]'] as string | string[] | undefined),
-      language: toArray(rawQuery['language[]'] as string | string[] | undefined),
-      rating: toArray(rawQuery['rating[]'] as string | string[] | undefined),
-      sort: (rawQuery.sort as string | undefined) ?? undefined,
-      page: (rawQuery.page as string | undefined) ?? '1',
-    };
-
-    // Remove empty arrays
-    (Object.keys(params) as (keyof FilterParams)[]).forEach(k => {
-      const val = params[k];
-      if (Array.isArray(val) && val.length === 0) delete params[k];
-    });
-
-    const cacheKey = `anikoto:filter:${JSON.stringify(params)}`;
-    const cached = await redisGetCache(cacheKey);
-    if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
-
-    try {
-      const data = await scrapeFilter(params);
-      (data as any).options = ANIKOTO_FILTER_OPTIONS;
-      await redisSetCache(cacheKey, data, TTL.FILTER);
-      return reply.status(200).send({ ok: true, data });
-    } catch (error) {
-      request.log.error({ error }, 'Anikoto: failed to scrape filter');
-      return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
-    }
-  });
-
-  // ─── Schedule ─────────────────────────────────────────────────────────────
-  fastify.get('/schedule', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${60 * 60}, stale-while-revalidate=300`);
-
-    const refresh = request.query.refresh === '1';
-    const cacheKey = 'anikoto:schedule';
-    const cached = await redisGetCache(cacheKey);
-    if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
-
-    try {
-      const data = await scrapeSchedule();
-      await redisSetCache(cacheKey, data, TTL.SCHEDULE);
-      return reply.status(200).send({ ok: true, data });
-    } catch (error) {
-      request.log.error({ error }, 'Anikoto: failed to scrape schedule');
-      return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
-    }
-  });
-
-  // ─── Latest / Most-viewed / New-release listings ─────────────────────────
-  fastify.get('/latest', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${5 * 60}, stale-while-revalidate=60`);
-
-    const VALID_TYPES: Record<string, string> = {
-      'latest-updated': '/latest-updated',
-      'new-release': '/new-release',
-      'most-viewed': '/most-viewed',
-    };
-
-    const type = (request.query.type as string) ?? 'latest-updated';
-    const page = parseInt((request.query.page as string) ?? '1', 10);
-    const refresh = request.query.refresh === '1';
-
-    if (!VALID_TYPES[type]) {
-      return reply.status(400).send({
-        ok: false,
-        message: `type must be one of: ${Object.keys(VALID_TYPES).join(', ')}`,
-      });
-    }
-
-    const cacheKey = `anikoto:listing:${type}:${page}`;
-    const cached = await redisGetCache(cacheKey);
-    if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
-
-    try {
-      const data = await scrapeListingPage(VALID_TYPES[type]!, page);
-      await redisSetCache(cacheKey, data, TTL.HOME);
-      return reply.status(200).send({ ok: true, data });
-    } catch (error) {
-      request.log.error({ error }, 'Anikoto: failed to scrape latest');
-      return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
-    }
-  });
-
-  // ─── By Status ────────────────────────────────────────────────────────────
-  fastify.get('/status', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${5 * 60}, stale-while-revalidate=60`);
-
-    const STATUS_PATHS: Record<string, string> = {
-      'currently-airing': '/status/currently-airing',
-      'finished-airing': '/status/finished-airing',
-      'not-yet-aired': '/status/not-yet-aired',
-    };
-
-    const type = (request.query.type as string) ?? 'currently-airing';
-    const page = parseInt((request.query.page as string) ?? '1', 10);
-    const refresh = request.query.refresh === '1';
-
-    if (!STATUS_PATHS[type]) {
-      return reply.status(400).send({
-        ok: false,
-        message: `type must be one of: ${Object.keys(STATUS_PATHS).join(', ')}`,
-      });
-    }
-
-    const cacheKey = `anikoto:status:${type}:${page}`;
-    const cached = await redisGetCache(cacheKey);
-    if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
-
-    try {
-      const data = await scrapeListingPage(STATUS_PATHS[type]!, page);
-      await redisSetCache(cacheKey, data, TTL.FILTER);
-      return reply.status(200).send({ ok: true, data });
-    } catch (error) {
-      request.log.error({ error }, 'Anikoto: failed to scrape status listing');
-      return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
-    }
-  });
-
-  // ─── By Genre ─────────────────────────────────────────────────────────────
-  fastify.get(
-    '/genre/:genre',
-    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${5 * 60}, stale-while-revalidate=60`);
-
-      const genre = request.params.genre;
-      const page = parseInt((request.query.page as string) ?? '1', 10);
-      const refresh = request.query.refresh === '1';
-
-      if (!genre) {
-        return reply.status(400).send({ ok: false, message: 'genre is required' });
+      const result = await anikoto.fetchHome();
+      if (!result || typeof result !== 'object') {
+        request.log.warn({ result }, 'External provider returned null/undefined');
+        return reply.status(502).send({
+          error: 'External provider returned an invalid response(null)',
+        });
+      }
+      if (result.error) {
+        return reply.status(result.status as number).send(result);
       }
 
-      const cacheKey = `anikoto:genre:${genre}:${page}`;
-      const cached = await redisGetCache(cacheKey);
-      if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
+      return reply.status(200).send(result);
+    } catch (error) {
+      return reply.status(500).send({ error: error });
+    }
+  });
+  fastify.get(
+    '/anime/releasing',
+    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
+      reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
+
+      const page = request.query.page || 1;
+
+      const cacheKey = `anikoto-releasing-${page}`;
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) {
+        return reply.status(200).send(cachedData);
+      }
 
       try {
-        const data = await scrapeListingPage(`/genre/${genre}`, page);
-        await redisSetCache(cacheKey, data, TTL.FILTER);
-        return reply.status(200).send({ ok: true, data: { ...data, genre } });
+        const result = await anikoto.fetchReleasing(page);
+
+        if (!result || typeof result !== 'object') {
+          return reply.status(502).send({
+            error: 'External provider returned an invalid response(null)',
+          });
+        }
+        if (result.error) {
+          return reply.status(result.status as number).send(result);
+        }
+        if (result && Array.isArray(result.data) && result.data.length > 0) {
+          await redisSetCache(cacheKey, result, 6);
+        }
+        return reply.status(200).send(result);
       } catch (error) {
-        request.log.error({ error }, 'Anikoto: failed to scrape genre listing');
-        return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
+        return reply.status(500).send(error);
       }
     },
   );
 
-  // ─── By Media Type ────────────────────────────────────────────────────────
-  const VALID_MEDIA_TYPES = ['tv', 'movie', 'ova', 'ona', 'special', 'music'];
+  fastify.get(
+    '/anime/upcoming',
+    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
+      reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
+
+      const page = request.query.page || 1;
+
+      const cacheKey = `anikoto-upcoming-${page}`;
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) {
+        return reply.status(200).send(cachedData);
+      }
+
+      try {
+        const result = await anikoto.fetchUpcoming(page);
+
+        if (!result || typeof result !== 'object') {
+          return reply.status(502).send({
+            error: 'External provider returned an invalid response(null)',
+          });
+        }
+        if (result.error) {
+          return reply.status(result.status as number).send(result);
+        }
+        if (result && Array.isArray(result.data) && result.data.length > 0) {
+          await redisSetCache(cacheKey, result, 168);
+        }
+        return reply.status(200).send(result);
+      } catch (error) {
+        return reply.status(500).send(error);
+      }
+    },
+  );
 
   fastify.get(
-    '/type/:mediaType',
+    '/anime/recent/:status',
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${5 * 60}, stale-while-revalidate=60`);
+      reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
 
-      const mediaType = request.params.mediaType?.toLowerCase();
-      const page = parseInt((request.query.page as string) ?? '1', 10);
-      const refresh = request.query.refresh === '1';
+      const page = request.query.page || 1;
+      const status = request.params.status as 'completed' | 'added' | 'updated';
 
-      if (!mediaType || !VALID_MEDIA_TYPES.includes(mediaType)) {
+      if (status !== 'completed' && status !== 'added' && status !== 'updated') {
+        return reply
+          .status(400)
+          .send({ error: `Invalid path parameter status: '${status}'. Expected ''completed' , 'added' or 'updated'.` });
+      }
+      const cacheKey = `anikoto-recent-${status}-${page}`;
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) {
+        return reply.status(200).send(cachedData);
+      }
+
+      try {
+        let result;
+        switch (status) {
+          case 'completed':
+            result = await anikoto.fetchRecentlyCompleted(page);
+            break;
+          case 'added':
+            result = await anikoto.fetchRecentlyAdded(page);
+            break;
+          case 'updated':
+            result = await anikoto.fetchRecentlyUpdated(page);
+            break;
+          default:
+            return reply
+              .status(400)
+              .send({ error: `Invalid path parameter status: '${status}'. Expected ''completed' , 'added' or 'updated'.` });
+        }
+        if (!result || typeof result !== 'object') {
+          return reply.status(502).send({
+            error: 'External provider returned an invalid response(null)',
+          });
+        }
+        if (result.error) {
+          return reply.status(result.status as number).send(result);
+        }
+        if (result && Array.isArray(result.data) && result.data.length > 0) {
+          await redisSetCache(cacheKey, result, 1);
+        }
+        return reply.status(200).send(result);
+      } catch (error) {
+        return reply.status(500).send(error);
+      }
+    },
+  );
+
+  fastify.get(
+    '/anime/format/:format',
+    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
+      reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
+
+      const page = Number(request.query.page) || 1;
+      const format = request.params.format as IAnimeCategory;
+
+      if (!IAnimeCategoryArr.includes(format)) {
         return reply.status(400).send({
-          ok: false,
-          message: `type must be one of: ${VALID_MEDIA_TYPES.join(', ')}`,
+          error: `Invalid format: '${format}'. Expected one of ${IAnimeCategoryArr.join(', ')}.`,
+        });
+      }
+      if (!format) {
+        return reply.status(400).send({ error: 'Missing required path paramater: format' });
+      }
+      const cacheKey = `anikoto-format-${format}-${page}`;
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) {
+        return reply.status(200).send(cachedData);
+      }
+
+      try {
+        const result = await anikoto.fetchAnimeCategory(format, page);
+        if (!result || typeof result !== 'object') {
+          request.log.warn({ format, page, result }, 'External provider returned null/undefined');
+          return reply.status(502).send({
+            error: 'External provider returned an invalid response(null)',
+          });
+        }
+        if (result.error) {
+          return reply.status(result.status as number).send(result);
+        }
+
+        if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+          await redisSetCache(cacheKey, result, 48);
+        }
+
+        return reply.status(200).send(result);
+      } catch (error) {
+        return reply.status(500).send(error);
+      }
+    },
+  );
+
+  fastify.get(
+    '/anime/genre/:genre',
+    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
+      reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
+
+      const page = Number(request.query.page) || 1;
+      const genre = request.params.genre;
+
+      if (!genre) {
+        return reply.status(400).send({
+          error: "Missing required path parameter: 'genre'.",
         });
       }
 
-      const cacheKey = `anikoto:type:${mediaType}:${page}`;
-      const cached = await redisGetCache(cacheKey);
-      if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
+      const cacheKey = `anikoto-genre-${page}`;
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) {
+        return reply.status(200).send(cachedData);
+      }
 
       try {
-        const data = await scrapeListingPage(`/type/${mediaType}`, page);
-        await redisSetCache(cacheKey, data, TTL.FILTER);
-        return reply.status(200).send({ ok: true, data: { ...data, mediaType } });
-      } catch (error) {
-        request.log.error({ error }, 'Anikoto: failed to scrape type listing');
-        return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
-      }
-    },
-  );
-
-  // ─── Anime Detail ─────────────────────────────────────────────────────────
-  fastify.get(
-    '/anime/:slug',
-    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${30 * 60}, stale-while-revalidate=300`);
-
-      const slug = request.params.slug;
-      const refresh = request.query.refresh === '1';
-
-      if (!slug) {
-        return reply.status(400).send({ ok: false, message: 'slug is required' });
-      }
-
-      const cacheKey = `anikoto:anime:${slug}`;
-      const cached = await redisGetCache(cacheKey);
-      if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
-
-      try {
-        const data = await scrapeAnimeDetail(slug);
-        await redisSetCache(cacheKey, data, TTL.ANIME);
-        return reply.status(200).send({ ok: true, data });
-      } catch (error) {
-        request.log.error({ error, slug }, 'Anikoto: failed to scrape anime detail');
-        return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
-      }
-    },
-  );
-
-  // ─── Episode List ─────────────────────────────────────────────────────────
-  fastify.get(
-    '/anime/:slug/episodes',
-    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${10 * 60}, stale-while-revalidate=60`);
-
-      const slug = request.params.slug;
-      const refresh = request.query.refresh === '1';
-
-      if (!slug) {
-        return reply.status(400).send({ ok: false, message: 'slug is required' });
-      }
-
-      const startRaw = request.query.start as string | undefined;
-      const endRaw = request.query.end as string | undefined;
-
-      let startEpisode: number | undefined;
-      let endEpisode: number | undefined;
-      let cacheKey = `anikoto:episodes:${slug}`;
-
-      if (startRaw && endRaw) {
-        const s = parseInt(startRaw, 10);
-        const e = parseInt(endRaw, 10);
-        if (!isNaN(s) && !isNaN(e) && s > 0 && e > 0 && s <= e) {
-          startEpisode = s;
-          endEpisode = e;
-          cacheKey += `:${s}-${e}`;
-        } else {
-          return reply.status(400).send({
-            ok: false,
-            message: 'Invalid episode range. start and end must be positive integers with start <= end.',
+        const result = await anikoto.fetchGenre(genre, page);
+        if (!result || typeof result !== 'object') {
+          request.log.warn({ genre, page, result }, 'External provider returned null/undefined');
+          return reply.status(502).send({
+            error: 'External provider returned an invalid response(null)',
           });
         }
-      }
-
-      const cached = await redisGetCache(cacheKey);
-      if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
-
-      try {
-        const data = await scrapeAnimeEpisodes(slug, startEpisode, endEpisode);
-        await redisSetCache(cacheKey, data, TTL.EPISODE);
-        return reply.status(200).send({ ok: true, data });
+        if (result.error) {
+          return reply.status(result.status as number).send(result);
+        }
+        if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+          await redisSetCache(cacheKey, result, 168);
+        }
+        return reply.status(200).send(result);
       } catch (error) {
-        request.log.error({ error, slug }, 'Anikoto: failed to scrape episodes');
-        return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
+        return reply.status(500).send(error);
       }
     },
   );
 
-  // ─── Watch (servers + sources + m3u8) ────────────────────────────────────
   fastify.get(
-    '/watch/:slug',
+    '/anime/az-list/:sort',
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${10 * 60}, stale-while-revalidate=60`);
+      reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
 
-      const slug = request.params.slug;
-      const epNum = (request.query.ep as string) || '1';
-      const refresh = request.query.refresh === '1';
+      const page = Number(request.query.page) || 1;
+      const sort = request.params.sort;
 
-      if (!slug) {
-        return reply.status(400).send({ ok: false, message: 'slug is required' });
+      if (!sort) {
+        return reply.status(400).send({ error: `Missing required path parameter: sort` });
       }
 
-      const cacheKey = `anikoto:watch:${slug}:${epNum}`;
-      const cached = await redisGetCache(cacheKey);
-      if (cached && !refresh) return reply.status(200).send({ ok: true, data: cached });
+      const cacheKey = `anikoto-sort-${sort}-${page}`;
+
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) {
+        return reply.status(200).send(cachedData);
+      }
 
       try {
-        const data = await scrapeWatch(slug, epNum);
-        await redisSetCache(cacheKey, data, TTL.EPISODE);
-        return reply.status(200).send({ ok: true, data });
+        const result = await anikoto.fetchAtoZList(sort, page);
+        if (!result || typeof result !== 'object') {
+          return reply.status(502).send({
+            error: 'External provider returned an invalid response(null)',
+          });
+        }
+        if (result.error) {
+          return reply.status(result.status as number).send(result);
+        }
+
+        if (result && Array.isArray(result.data) && result.data.length > 0) {
+          await redisSetCache(cacheKey, result, 168);
+        }
+        return reply.status(200).send(result);
       } catch (error) {
-        request.log.error({ error, slug, epNum }, 'Anikoto: failed to scrape watch data');
-        return reply.status(500).send({ ok: false, message: `Internal server error: ${error}` });
+        return reply.status(500).send(error);
       }
     },
   );
+  fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
+    reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
-  // ─── m3u8 Proxy ──────────────────────────────────────────────────────────
-  fastify.get('/proxy', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    const targetUrl = request.query.url as string | undefined;
-    const referer = request.query.referer as string | undefined;
+    const { q, page = 1 } = request.query;
+    if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
+    if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
 
-    if (!targetUrl) {
-      return reply.status(400).send({ ok: false, message: 'Missing url parameter' });
-    }
+    const cacheKey = `anikoto-search-${q}-${page}`;
+    const cachedData = await redisGetCache(cacheKey);
+    if (cachedData) return reply.status(200).send(cachedData);
 
     try {
-      const headers: Record<string, string> = {
-        'User-Agent': ANIKOTO_DEFAULT_HEADERS['User-Agent'],
-        Accept: '*/*',
-      };
-
-      if (referer) {
-        headers['Referer'] = referer;
-        try {
-          headers['Origin'] = new URL(referer).origin;
-        } catch {
-          // ignore bad referer
-        }
+      const result = await anikoto.search(q, page);
+      if (!result || typeof result !== 'object') {
+        return reply.status(502).send({
+          error: 'External provider returned an invalid response(null)',
+        });
       }
 
-      const response = await axios.get(targetUrl, {
-        responseType: 'arraybuffer',
-        headers,
-        timeout: 15_000,
-      });
-
-      const contentType = (response.headers['content-type'] as string) || 'application/octet-stream';
-      let responseData = response.data as Buffer;
-
-      // Rewrite m3u8 playlists to proxy all segments through this endpoint
-      if (targetUrl.includes('.m3u8') || contentType.includes('mpegurl')) {
-        const text = Buffer.from(responseData).toString('utf-8');
-        const baseUrl = new URL(targetUrl);
-
-        const rewrittenText = text
-          .split('\n')
-          .map(line => {
-            if (line.includes('URI=')) {
-              line = line.replace(/URI=["']([^"']+)["']/g, (_match: string, uri: string) => {
-                let keyUrl = uri;
-                if (!keyUrl.startsWith('http')) keyUrl = new URL(keyUrl, baseUrl).toString();
-                const proxied = `/api/anikoto/proxy?url=${encodeURIComponent(keyUrl)}&referer=${encodeURIComponent(referer ?? '')}`;
-                return `URI="${proxied}"`;
-              });
-            }
-            if (line.startsWith('#') || !line.trim()) return line;
-
-            let segmentUrl = line.trim();
-            if (!segmentUrl.startsWith('http')) segmentUrl = new URL(segmentUrl, baseUrl).toString();
-            return `/api/anikoto/proxy?url=${encodeURIComponent(segmentUrl)}&referer=${encodeURIComponent(referer ?? '')}`;
-          })
-          .join('\n');
-
-        responseData = Buffer.from(rewrittenText, 'utf-8');
+      if (result.error) {
+        return reply.status(result.status as number).send({ error: result.error });
       }
-
-      reply.header('Content-Type', contentType);
-      reply.header('Access-Control-Allow-Origin', '*');
-      reply.header('Cache-Control', 'no-cache');
-      return reply.status(200).send(responseData);
-    } catch (err: unknown) {
-      const status = (err as any)?.response?.status || 500;
-      request.log.error({ err, targetUrl }, `Anikoto proxy error: ${status}`);
-      return reply.status(status).send({ ok: false, message: 'Proxy request failed' });
+      if (result && Array.isArray(result.data) && result.data.length > 0) {
+        await redisSetCache(cacheKey, result, 168);
+      }
+      return reply.status(200).send(result);
+    } catch (error) {
+      return reply.status(500).send(error);
     }
   });
+  fastify.get('/anime/suggestions', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
+    reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
+
+    const { q } = request.query;
+    if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
+    if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
+
+    const cacheKey = `anikoto-search-suggestions-${q}}`;
+    const cachedData = await redisGetCache(cacheKey);
+    if (cachedData) return reply.status(200).send(cachedData);
+
+    try {
+      const result = await anikoto.searchSuggestions(q);
+      if (!result || typeof result !== 'object') {
+        return reply.status(502).send({
+          error: 'External provider returned an invalid response(null)',
+        });
+      }
+
+      if (result.error) {
+        return reply.status(result.status as number).send({ error: result.error });
+      }
+      if (result && Array.isArray(result.data) && result.data.length > 0) {
+        await redisSetCache(cacheKey, result, 168);
+      }
+      return reply.status(200).send(result);
+    } catch (error) {
+      return reply.status(500).send(error);
+    }
+  });
+
+  fastify.get('/anime/schedule', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
+    reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
+
+    const { timezone } = request.query;
+    if (!timezone) {
+      return reply.status(400).send({ error: "Missing required query param: 'timezone'" });
+    }
+    const offset = Number(timezone);
+
+    if (isNaN(offset)) {
+      return reply.status(400).send({ error: 'Timezone must be a valid number (e.g., 3 or -10)' });
+    }
+    if (offset < -12 || offset > 14) {
+      return reply.status(400).send({ error: 'Timezone must be between -12 and +14' });
+    }
+
+    const cacheKey = `anikoto-schedule-${timezone}}`;
+    const cachedData = await redisGetCache(cacheKey);
+    if (cachedData) return reply.status(200).send(cachedData);
+
+    try {
+      const result = await anikoto.fetchSchedule(offset);
+      if (!result || typeof result !== 'object') {
+        return reply.status(502).send({
+          error: 'External provider returned an invalid response(null)',
+        });
+      }
+
+      if (result.error) {
+        return reply.status(result.status as number).send({ error: result.error });
+      }
+      if (result && Array.isArray(result.data) && result.data.length > 0) {
+        await redisSetCache(cacheKey, result, 24);
+      }
+      return reply.status(200).send(result);
+    } catch (error) {
+      return reply.status(500).send(error);
+    }
+  });
+
+  fastify.get('/anime/:id', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
+    reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
+
+    const id = request.params.id;
+
+    if (!id) {
+      return reply.status(400).send({
+        error: `Missing required path paramater: 'id'`,
+      });
+    }
+    const cacheKey = `anikoto-animeinfo-${id}`;
+    const cachedData = await redisGetCache(cacheKey);
+    if (cachedData) {
+      return reply.status(200).send(cachedData);
+    }
+    try {
+      const result = await anikoto.fetchAnimeInfo(id);
+      if (result.error) {
+        return reply.status(result.status as number).send({ error: result.error });
+      }
+
+      if (!result || typeof result !== 'object') {
+        return reply.status(502).send({
+          error: 'External provider returned an invalid response(null)',
+        });
+      }
+      if (
+        result.data !== null &&
+        Array.isArray(result.providerEpisodes) &&
+        result.providerEpisodes.length > 0 &&
+        result.data.status.toLowerCase() === 'finished airing'
+      ) {
+        await redisSetCache(cacheKey, result, 24);
+      }
+      return reply.status(200).send(result);
+    } catch (error) {
+      return reply.status(500).send(error);
+    }
+  });
+
+  fastify.get(
+    '/episode/:episodeId/servers',
+    async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
+      reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
+
+      const episodeId = request.params.episodeId;
+
+      if (!episodeId) {
+        return reply.status(400).send({
+          error: `Missing required path paramater: 'episodeId'`,
+        });
+      }
+      const cacheKey = `anikoto-servers-${episodeId}`;
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) return reply.status(200).send(cachedData);
+      try {
+        const result = await anikoto.fetchServers(episodeId);
+        if (result.error) {
+          return reply.status(result.status as number).send({ error: result.error });
+        }
+        if (result && typeof result === 'object' && result.data !== null) {
+          await redisSetCache(cacheKey, result, 2);
+        }
+        return reply.status(200).send(result);
+      } catch (error) {
+        return reply.status(500).send(error);
+      }
+    },
+  );
+
+  fastify.get(
+    '/sources/:episodeId',
+    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
+      reply.header('Cache-Control', `public, s-maxage=${0.2 * 60 * 60}, stale-while-revalidate=300`);
+
+      const episodeId = request.params.episodeId;
+      const version = (request.query.version as 'sub' | 'dub') || 'sub';
+      const server = (request.query.server as 'vidstream-2' | 'vidcloud-1') || 'vidstream-2';
+      if (!['sub', 'dub'].includes(version)) {
+        return reply.status(400).send({
+          error: `Invalid version picked: '${version}'. Expected one of 'sub','dub'.`,
+        });
+      }
+      if (!episodeId) {
+        return reply.status(400).send({
+          error: `Missing required path paramater: 'episodeId'`,
+        });
+      }
+      const cacheKey = `anikoto-sources-${episodeId}-${version}-${server}`;
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) return reply.status(200).send(cachedData);
+
+      try {
+        const result = await anikoto.fetchSources(episodeId, version, server);
+        if (!result || typeof result !== 'object') {
+          return reply.status(502).send({
+            error: 'External provider returned an invalid response(null)',
+          });
+        }
+        if (result.error) {
+          return reply.status(result.status as number).send({ error: result.error });
+        }
+        if (result && result.data && Array.isArray(result.data.sources) && result.data.sources.length > 0) {
+          await redisSetCache(cacheKey, result, 0.2);
+        }
+        return reply.status(200).send(result);
+      } catch (error) {
+        return reply.status(500).send(error);
+      }
+    },
+  );
 }

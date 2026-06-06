@@ -9,7 +9,7 @@ const animepahe = new Animepahe(baseUrl);
 
 export default async function AnimepaheRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
 
     const { q } = request.query;
     if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
@@ -21,25 +21,22 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
     try {
       const result = await animepahe.search(q);
       if (!result || typeof result !== 'object') {
-        request.log.warn({ q, result }, 'External provider returned null/undefined');
         return reply.status(502).send({
           error: 'External provider returned an invalid response(null)',
         });
       }
 
       if (result.error) {
-        request.log.error({ result, q }, `External API Error: Failed to fetch search results for query:${q}`);
-        return reply.status(500).send(result);
+        return reply.status(result.status as number).send({ error: result.error });
       }
 
       if (result && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 6);
+        await redisSetCache(cacheKey, result, 2);
       }
 
       return reply.status(200).send(result);
     } catch (error) {
-      request.log.error({ error: error }, `Internal runtime error occurred while querying search results`);
-      return reply.status(500).send({ error: `Internal server error occurred:${error}` });
+      return reply.status(500).send(error);
     }
   });
 
@@ -57,15 +54,13 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
     try {
       const result = await animepahe.fetchRecentEpisodes(page);
       if (!result || typeof result !== 'object') {
-        request.log.warn({ page, result }, 'External provider returned null/undefined');
         return reply.status(502).send({
           error: 'External provider returned an invalid response(null)',
         });
       }
 
       if (result.error) {
-        request.log.error({ result, page }, `External API Error: Failed to fetch recent episodes results`);
-        return reply.status(500).send(result);
+        return reply.status(result.status as number).send({ error: result.error });
       }
 
       if (result && Array.isArray(result.data) && result.data.length > 0) {
@@ -74,8 +69,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send(result);
     } catch (error) {
-      request.log.error({ error: error }, `Internal runtime error occurred while fetching recent episodes`);
-      return reply.status(500).send({ error: `Internal server occurred:${error}` });
+      return reply.status(500).send(error);
     }
   });
   fastify.get('/anime/:id', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
@@ -88,7 +82,13 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
         error: `Missing required path paramater: 'id'`,
       });
     }
-
+    if (Number.isNaN(Number(id))) {
+      return reply.status(418).send({
+        error: 'Short and stout!',
+        message: "I'm a teapot, and I can't process this request because 'id' is invalid.",
+        hint: 'Fill me with a valid ID, not tea leaves. Anyways who are you?',
+      });
+    }
     const cacheKey = `animepahe-info-${id}`;
     const cachedData = await redisGetCache(cacheKey);
     if (cachedData) {
@@ -98,12 +98,10 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
     try {
       const result = await animepahe.fetchAnimeInfo(id);
       if (result.error) {
-        request.log.error({ result, id }, `External API Error: Failed to fetch anime info`);
-        return reply.status(500).send(result);
+        return reply.status(result.status as number).send({ error: result.error });
       }
 
       if (!result || typeof result !== 'object') {
-        request.log.warn({ id, result }, 'External provider returned null/undefined');
         return reply.status(502).send({
           error: 'External provider returned an invalid response(null)',
         });
@@ -120,8 +118,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
       }
       return reply.status(200).send(result);
     } catch (error) {
-      request.log.error({ error: error }, `Internal runtime error occurred while fetching anime info`);
-      return reply.status(500).send({ error: `Internal server occurred:${error}` });
+      return reply.status(500).send(error);
     }
   });
 
@@ -146,23 +143,20 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
       const result = await animepahe.fetchEpisodes(id);
 
       if (!result || typeof result !== 'object') {
-        request.log.warn({ id, result }, 'External provider returned null/undefined');
         return reply.status(502).send({
           error: 'External provider returned an invalid response(null)',
         });
       }
 
       if (result.error) {
-        request.log.error({ result, id }, `External API Error: Failed to fetch episodes`);
-        return reply.status(500).send(result);
+        return reply.status(result.status as number).send({ error: result.error });
       }
       if (result && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 4);
+        await redisSetCache(cacheKey, result, 5);
       }
       return reply.status(200).send(result);
     } catch (error) {
-      request.log.error({ error: error }, `Internal runtime error occurred while fetching episodes`);
-      return reply.status(500).send({ error: `Internal server occurred:${error}` });
+      return reply.status(500).send(error);
     }
   });
 
@@ -188,8 +182,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
       try {
         const result = await animepahe.fetchServers(episodeId);
         if (result.error) {
-          request.log.error({ result, episodeId }, `External API Error: Failed to fetch servers`);
-          return reply.status(500).send(result);
+          return reply.status(result.status as number).send({ error: result.error });
         }
 
         if (result && typeof result === 'object' && result.data?.episodeNumber !== 0) {
@@ -197,8 +190,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
         }
         return reply.status(200).send(result);
       } catch (error) {
-        request.log.error({ error: error }, `Internal runtime error occurred while fetching streaming server info`);
-        return reply.status(500).send({ error: `Internal server occurred:${error}` });
+        return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
       }
     },
   );
@@ -228,22 +220,19 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
       try {
         const result = await animepahe.fetchSources(episodeId, version);
         if (!result || typeof result !== 'object') {
-          request.log.warn({ episodeId, version, result }, 'External provider returned null/undefined');
           return reply.status(502).send({
             error: 'External provider returned an invalid response(null)',
           });
         }
         if (result.error) {
-          request.log.error({ result, episodeId, version }, `External API Error: Failed to fetch sources`);
-          return reply.status(500).send(result);
+          return reply.status(result.status as number).send({ error: result.error });
         }
         if (result && result.data && Array.isArray(result.data.sources) && result.data.sources.length > 0) {
           await redisSetCache(cacheKey, result, 6);
         }
         return reply.status(200).send(result);
       } catch (error) {
-        request.log.error({ error: error }, `Internal runtime error occurred while fetching sources`);
-        return reply.status(500).send({ error: `Internal server occurred:${error}` });
+        return reply.status(500).send(error);
       }
     },
   );

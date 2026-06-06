@@ -27,6 +27,7 @@ export interface FastifyQuery {
   country?: string;
   genre?: string;
   quality?: string;
+  timezone?: string;
 }
 
 export const IAMetaFormatArr = ['TV', 'MOVIE', 'SPECIAL', 'OVA', 'ONA', 'MUSIC', 'MANGA'] as const;
@@ -35,4 +36,6 @@ export const IAnimeCategoryArr = ['TV', 'MOVIE', 'SPECIALS', 'OVA', 'ONA'] as co
 
 export const IAnimeSeasonsArr = ['WINTER', 'SPRING', 'SUMMER', 'FALL'] as const;
 
-export const allowedProviders = ['animepahe', 'anizone', 'animekai'];
+export const allowedAnimeProviders = ['animepahe', 'anizone', 'anikoto'];
+
+export const JikanList = ['favorite', 'popular', 'rating', 'airing', 'upcoming'] as const;

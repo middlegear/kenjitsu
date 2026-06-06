@@ -7,6 +7,8 @@ import AnimepaheRoutes from './routes/anime/animepahe.js';
 import AnizoneRoutes from './routes/anime/anizone.js';
 import AnilistRoutes from './routes/meta/anilist.js';
 import AnikotoRoutes from './routes/anime/anikoto.js';
+import JikanRoutes from './routes/meta/jikan.js';
+import TheMovieDatabaseRoutes from './routes/meta/tmdb.js';
 
 import { ratelimitOptions, rateLimitPlugIn } from './config/ratelimit.js';
 import fastifyCors, { corsOptions } from './config/cors.js';
@@ -68,6 +70,8 @@ async function FastifyApp() {
   await app.register(fastifyCors, corsOptions);
   await app.register(StaticRoutes);
   await app.register(AnilistRoutes, { prefix: '/api/anilist' });
+  await app.register(JikanRoutes, { prefix: '/api/jikan' });
+  await app.register(TheMovieDatabaseRoutes, { prefix: '/api/tmdb' });
   await app.register(AnimepaheRoutes, { prefix: '/api/animepahe' });
   await app.register(AnizoneRoutes, { prefix: '/api/anizone' });
   await app.register(AnikotoRoutes, { prefix: '/api/anikoto' });
