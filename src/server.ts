@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
-import events from 'events';
+import events from 'node:events';
 
 import StaticRoutes from './routes/static.js';
 import AnimepaheRoutes from './routes/anime/animepahe.js';
