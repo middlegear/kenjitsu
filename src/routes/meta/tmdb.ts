@@ -7,70 +7,38 @@ import { redisGetCache, redisSetCache } from '../../config/redis.js';
 const tmdb = new TheMovieDatabase();
 
 export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
-  fastify.get(
-    '/movies/search',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Search Movies',
-        description: 'Search movies by title using TMDB.',
-        querystring: {
-          type: 'object',
-          properties: {
-            q: { type: 'string', description: 'Movie title to search for' },
-            page: { type: 'number', default: 1, description: 'Page number' },
-          },
-          required: ['q'],
-        },
-      },
-    },
-    async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
+  fastify.get('/movies/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
+    reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
 
-      const { q, page = 1 } = request.query;
+    const { q, page = 1 } = request.query;
 
-      if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
-      if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
+    if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
+    if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
 
-      const cacheKey = `tmdb-search-movie-${q}-${page}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
+    const cacheKey = `tmdb-search-movie-${q}-${page}`;
+    const cachedData = await redisGetCache(cacheKey);
+    if (cachedData) return reply.status(200).send(cachedData);
 
-      try {
-        const result = await tmdb.searchMovie(q, page);
-        if (!result || typeof result !== 'object') {
-          return reply.status(502).send({ error: 'External provider returned an invalid response(null)' });
-        }
-        if (result.error) {
-          return reply.status(result.status as number).send({ error: result.error });
-        }
-        if (result && Array.isArray(result.data) && result.data.length > 0) {
-          await redisSetCache(cacheKey, result, 168);
-        }
-        return reply.status(200).send(result);
-      } catch (error) {
-        return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+    try {
+      const result = await tmdb.searchMovie(q, page);
+      if (!result || typeof result !== 'object') {
+        return reply.status(502).send({ error: 'External provider returned an invalid response(null)' });
       }
-    },
-  );
+      if (result.error) {
+        return reply.status(result.status as number).send({ error: result.error });
+      }
+      if (result && Array.isArray(result.data) && result.data.length > 0) {
+        await redisSetCache(cacheKey, result, 168);
+      }
+      return reply.status(200).send(result);
+    } catch (error) {
+      return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
+    }
+  });
 
   fastify.get(
     '/tv/search',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Search TV Shows',
-        description: 'Search TV shows by title using TMDB.',
-        querystring: {
-          type: 'object',
-          properties: {
-            q: { type: 'string', description: 'TV show title to search for' },
-            page: { type: 'number', default: 1, description: 'Page number' },
-          },
-          required: ['q'],
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
       const { q, page = 1 } = request.query;
@@ -102,22 +70,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/movies/category/:category',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Get Categorized Movies',
-        description: 'Retrieve popular or top-rated movies.',
-        params: {
-          type: 'object',
-          required: ['category'],
-          properties: { category: { type: 'string', enum: ['popular', 'top'] } },
-        },
-        querystring: {
-          type: 'object',
-          properties: { page: { type: 'number', default: 1 } },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -163,22 +116,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/tv/category/:category',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Get Categorized TV Shows',
-        description: 'Retrieve popular or top-rated TV shows.',
-        params: {
-          type: 'object',
-          required: ['category'],
-          properties: { category: { type: 'string', enum: ['popular', 'top'] } },
-        },
-        querystring: {
-          type: 'object',
-          properties: { page: { type: 'number', default: 1 } },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -224,18 +162,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/movies/:id',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Get Movie Information',
-        description: 'Fetches detailed information for a specific movie.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: { id: { type: 'number' } },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -266,18 +193,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/tv/:id',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Get TV Series Information',
-        description: 'Fetches detailed information for a specific TV series.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: { id: { type: 'number' } },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -308,20 +224,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/movies/trending',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Get Trending Movies',
-        description: 'Retrieve currently trending movies.',
-        querystring: {
-          type: 'object',
-          properties: {
-            page: { type: 'number', default: 1 },
-            timeWindow: { type: 'string', enum: ['day', 'week'] },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -357,20 +260,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/tv/trending',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Get Trending TV Shows',
-        description: 'Retrieve currently trending TV shows.',
-        querystring: {
-          type: 'object',
-          properties: {
-            page: { type: 'number', default: 1 },
-            timeWindow: { type: 'string', enum: ['day', 'week'] },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -406,21 +296,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/tv/:id/seasons/:season',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Get TV Season Episodes',
-        description: 'Fetches episodes for a specific season of a TV series.',
-        params: {
-          type: 'object',
-          required: ['id', 'season'],
-          properties: {
-            id: { type: 'number' },
-            season: { type: 'number' },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -454,22 +330,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/tv/:id/seasons/:season/episodes/:episode',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Get Episode Details',
-        description: 'Fetches detailed information for a specific episode.',
-        params: {
-          type: 'object',
-          required: ['id', 'season', 'episode'],
-          properties: {
-            id: { type: 'number' },
-            season: { type: 'number' },
-            episode: { type: 'number' },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -505,24 +366,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/category/:category',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Get Anime by Category',
-        description: 'Retrieve anime by popularity, top rating, seasonal or weekly.',
-        params: {
-          type: 'object',
-          required: ['category'],
-          properties: {
-            category: { type: 'string', enum: ['popular', 'top', 'seasonal', 'weekly'] },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: { page: { type: 'number', default: 1 } },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -577,21 +421,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/artworks/:category/:id',
-    {
-      schema: {
-        tags: ['TheMovieDatabase'],
-        summary: 'Get Media Artworks',
-        description: 'Fetches artworks (posters, backdrops, logos) for a movie or TV show.',
-        params: {
-          type: 'object',
-          required: ['category', 'id'],
-          properties: {
-            category: { type: 'string', enum: ['movie', 'tv'] },
-            id: { type: 'number' },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 

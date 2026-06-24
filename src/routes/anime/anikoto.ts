@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { Anikoto, type IAnimeCategory, type IMetaFormat } from 'kenjitsu-extensions';
+import { Anikoto, type IAnimeCategory } from 'kenjitsu-extensions';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { type FastifyQuery, type FastifyParams, IAMetaFormatArr, IAnimeCategoryArr } from '../../utils/types.js';
+import { type FastifyQuery, type FastifyParams, IAnimeCategoryArr } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
 const baseUrl = process.env.ANIKOTOURL || 'https://anikototv.to';
@@ -10,13 +10,7 @@ const anikoto = new Anikoto(baseUrl);
 export default async function AnikotoRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/anime/home',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get homepage data',
-        description: 'Fetch Anikoto homepage sections and anime lists.',
-      },
-    },
+
     async (request: FastifyRequest, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
       try {
@@ -41,23 +35,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/releasing',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get currently releasing anime',
-        description: 'Retrieve a paginated list of ongoing anime.',
-        querystring: {
-          type: 'object',
-          properties: {
-            page: {
-              type: 'number',
-              default: 1,
-              description: 'The page number for pagination.',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
       const page = request.query.page || 1;
@@ -88,23 +66,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/upcoming',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get upcoming anime',
-        description: 'Retrieve a paginated list of upcoming anime releases.',
-        querystring: {
-          type: 'object',
-          properties: {
-            page: {
-              type: 'number',
-              default: 1,
-              description: 'The page number for pagination.',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
       const page = request.query.page || 1;
@@ -135,32 +97,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/recent/:status',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get recent anime by status',
-        description: 'Retrieve recently completed, added, or updated anime.',
-        params: {
-          type: 'object',
-          required: ['status'],
-          properties: {
-            status: {
-              type: 'string',
-              enum: ['completed', 'added', 'updated'],
-            },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            page: {
-              type: 'number',
-              default: 1,
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
       const page = request.query.page || 1;
@@ -212,31 +149,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/format/:format',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get anime by format',
-        description: 'Retrieve anime filtered by format (TV, Movie, OVA, etc.).',
-        params: {
-          type: 'object',
-          required: ['format'],
-          properties: {
-            format: {
-              type: 'string',
-            },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            page: {
-              type: 'number',
-              default: 1,
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
       const page = Number(request.query.page) || 1;
@@ -277,31 +190,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/genre/:genre',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get anime by genre',
-        description: 'Retrieve anime filtered by a specific genre.',
-        params: {
-          type: 'object',
-          required: ['genre'],
-          properties: {
-            genre: {
-              type: 'string',
-            },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            page: {
-              type: 'number',
-              default: 1,
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
       const page = Number(request.query.page) || 1;
@@ -339,31 +228,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/az-list/:sort',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get A-Z anime list',
-        description: 'Retrieve anime sorted alphabetically or by character group.',
-        params: {
-          type: 'object',
-          required: ['sort'],
-          properties: {
-            sort: {
-              type: 'string',
-            },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            page: {
-              type: 'number',
-              default: 1,
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
       const page = Number(request.query.page) || 1;
@@ -398,20 +263,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/search',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Search anime titles by query string',
-        querystring: {
-          type: 'object',
-          required: ['q'],
-          properties: {
-            q: { type: 'string' },
-            page: { type: 'number', default: 1 },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
       const { q, page = 1 } = request.query;
@@ -442,22 +294,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/suggestions',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get search suggestions',
-        description: 'Retrieve autocomplete suggestions for anime titles.',
-        querystring: {
-          type: 'object',
-          required: ['q'],
-          properties: {
-            q: {
-              type: 'string',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
       const { q } = request.query;
@@ -488,25 +325,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/schedule',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get anime schedule',
-        description: 'Fetch anime airing schedule by timezone offset.',
-        querystring: {
-          type: 'object',
-          properties: {
-            timezone: {
-              type: 'number',
-              description: 'Timezone offset from UTC (-12 to +12)',
-              minimum: -12,
-              maximum: 12,
-            },
-          },
-          required: ['timezone'],
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
       const { timezone } = request.query;
@@ -555,22 +374,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/:id',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get anime details',
-        description: 'Fetch detailed metadata and episode list for an anime.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: {
-            id: {
-              type: 'string',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
       const id = request.params.id;
@@ -611,22 +415,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/episode/:episodeId/servers',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get episode servers',
-        description: 'Retrieve available streaming servers (sub/dub) for an episode.',
-        params: {
-          type: 'object',
-          required: ['episodeId'],
-          properties: {
-            episodeId: {
-              type: 'string',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       const episodeId = request.params.episodeId;
       if (!episodeId) {
@@ -648,37 +437,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/sources/:episodeId',
-    {
-      schema: {
-        tags: ['Anikoto'],
-        summary: 'Get episode sources',
-        description: 'Retrieve streaming sources, subtitles, and timestamps for an episode.',
-        params: {
-          type: 'object',
-          required: ['episodeId'],
-          properties: {
-            episodeId: {
-              type: 'string',
-            },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            version: {
-              type: 'string',
-              enum: ['sub', 'dub', 'raw'],
-              default: 'sub',
-            },
-            server: {
-              type: 'string',
-              enum: ['vidstream-2', 'vidcloud-1', 'vidplay-1', 'hd-1'],
-              default: 'vidstream-2',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       const episodeId = request.params.episodeId;
       const version = (request.query.version as 'sub' | 'dub' | 'raw') || 'sub';

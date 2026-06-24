@@ -10,23 +10,7 @@ const anizone = new Anizone(baseUrl);
 export default async function AnizoneRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/anime/search',
-    {
-      schema: {
-        tags: ['Anizone'],
-        summary: 'Search anime',
-        description: 'Search anime by title using Anizone.',
-        querystring: {
-          type: 'object',
-          properties: {
-            q: {
-              type: 'string',
-              description: 'Anime title to search for',
-            },
-          },
-          required: ['q'],
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
       const { q } = request.query;
@@ -57,13 +41,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/recent',
-    {
-      schema: {
-        tags: ['Anizone'],
-        summary: 'Recent Updates',
-        description: 'Retrieve recently aired episodes and newly added anime.',
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
       const cacheKey = `anizone-updates`;
@@ -91,23 +69,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/:id',
-    {
-      schema: {
-        tags: ['Anizone'],
-        summary: 'Get Anime Information',
-        description: 'Fetches metadata and episode listings for a specific anime.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: {
-            id: {
-              type: 'string',
-              description: 'The unique identifier of the anime.',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
       const id = request.params.id;
@@ -153,23 +115,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/sources/:episodeId',
-    {
-      schema: {
-        tags: ['Anizone'],
-        summary: 'Get episode sources',
-        description: 'Retrieve media sources, subtitles and headers for an episode.',
-        params: {
-          type: 'object',
-          required: ['episodeId'],
-          properties: {
-            episodeId: {
-              type: 'string',
-              description: 'The unique identifier of the episode.',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
       const episodeId = request.params.episodeId;

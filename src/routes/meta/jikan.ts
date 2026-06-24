@@ -13,22 +13,7 @@ const jikan = new Jikan({
 export default async function JikanRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/anime/search',
-    {
-      schema: {
-        tags: ['Jikan'],
-        summary: 'Search anime',
-        description: 'Search MyAnimeList via Jikan.',
-        querystring: {
-          type: 'object',
-          required: ['q'],
-          properties: {
-            q: { type: 'string', maxLength: 1000, description: 'Search keyword' },
-            page: { type: 'number', default: 1, description: 'Page number' },
-            perPage: { type: 'number', default: 20, maximum: 25, description: 'Items per page' },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=300');
 
@@ -63,18 +48,6 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/:id',
-    {
-      schema: {
-        tags: ['Jikan'],
-        summary: 'Get anime details',
-        description: 'Fetch full metadata for an anime by MAL ID.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: { id: { type: 'number', description: 'MyAnimeList ID' } },
-        },
-      },
-    },
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
@@ -108,31 +81,7 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/top/:category',
-    {
-      schema: {
-        tags: ['Jikan'],
-        summary: 'Get top anime',
-        description: 'Get top ranked anime by category.',
-        params: {
-          type: 'object',
-          required: ['category'],
-          properties: {
-            category: {
-              type: 'string',
-              enum: ['favorite', 'popular', 'rating', 'airing', 'upcoming'],
-            },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            page: { type: 'number', default: 1 },
-            perPage: { type: 'number', default: 20, maximum: 25 },
-            format: { type: 'string', default: 'TV' },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -194,18 +143,7 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/:id/characters',
-    {
-      schema: {
-        tags: ['Jikan'],
-        summary: 'Get anime characters',
-        description: 'Fetch characters and voice actors for an anime.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: { id: { type: 'number', description: 'MyAnimeList ID' } },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${148 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -237,29 +175,6 @@ export default async function JikanRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/seasons/:season/:year?',
-    {
-      schema: {
-        tags: ['Jikan'],
-        summary: 'Get seasonal anime',
-        description: 'Fetch anime for a specific season and year.',
-        params: {
-          type: 'object',
-          required: ['season'],
-          properties: {
-            season: { type: 'string', enum: ['winter', 'spring', 'summer', 'fall', 'current', 'upcoming'] },
-            year: { type: 'string' },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            format: { type: 'string', default: 'TV', enum: ['TV', 'MOVIE', 'SPECIAL', 'OVA', 'ONA', 'MUSIC'] },
-            page: { type: 'number', default: 1 },
-            perPage: { type: 'number', default: 20, maximum: 25 },
-          },
-        },
-      },
-    },
     async (
       request: FastifyRequest<{
         Params: { season: Seasons | 'current' | 'upcoming'; year?: string };

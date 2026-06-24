@@ -15,22 +15,7 @@ const anilist = new Anilist();
 export default async function AnilistRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/anime/search',
-    {
-      schema: {
-        tags: ['AniList'],
-        summary: 'Search anime',
-        description: 'Search AniList database.',
-        querystring: {
-          type: 'object',
-          required: ['q'],
-          properties: {
-            q: { type: 'string', maxLength: 1000, description: 'Search keyword' },
-            page: { type: 'number', default: 1, description: 'Page number' },
-            perPage: { type: 'number', default: 20, maximum: 50, description: 'Items per page' },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${148 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -64,18 +49,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   );
   fastify.get(
     '/anime/:id',
-    {
-      schema: {
-        tags: ['AniList'],
-        summary: 'Get anime details',
-        description: 'Fetch full anime metadata by ID.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: { id: { type: 'number', description: 'AniList ID' } },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -108,27 +82,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/top/:category',
-    {
-      schema: {
-        tags: ['AniList'],
-        summary: 'Get top anime',
-        description: 'Get top anime by category.',
-        params: {
-          type: 'object',
-          required: ['category'],
-          properties: {
-            category: { type: 'string', enum: ['airing', 'trending', 'upcoming', 'popular', 'rating'] },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            page: { type: 'number', default: 1 },
-            perPage: { type: 'number', default: 20, maximum: 50 },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -184,18 +138,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/:id/characters',
-    {
-      schema: {
-        tags: ['AniList'],
-        summary: 'Get anime characters',
-        description: 'Fetch characters and voice actors.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: { id: { type: 'number', description: 'AniList ID' } },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -227,18 +170,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/:id/related',
-    {
-      schema: {
-        tags: ['AniList'],
-        summary: 'Get related anime',
-        description: 'Fetch related anime recommendations.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: { id: { type: 'number', description: 'AniList ID' } },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -269,25 +201,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   );
   fastify.get(
     '/airing/date/:date',
-    {
-      schema: {
-        tags: ['AniList'],
-        summary: 'Get airing schedule by date',
-        description: 'Get anime airing on a specific date.',
-        params: {
-          type: 'object',
-          required: ['date'],
-          properties: { date: { type: 'string', format: 'date', description: 'YYYY-MM-DD' } },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            page: { type: 'number', default: 1 },
-            perPage: { type: 'number', default: 20 },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -320,18 +234,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/schedule/:id',
-    {
-      schema: {
-        tags: ['AniList'],
-        summary: 'Get media airing schedule',
-        description: 'Get airing schedule for a specific anime.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: { id: { type: 'number', description: 'AniList ID' } },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -362,29 +265,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   );
   fastify.get(
     '/seasons/:season/:year',
-    {
-      schema: {
-        tags: ['AniList'],
-        summary: 'Get seasonal anime',
-        description: 'Fetch anime for a specific season and year.',
-        params: {
-          type: 'object',
-          required: ['season', 'year'],
-          properties: {
-            season: { type: 'string' },
-            year: { type: 'number' },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            format: { type: 'string', default: 'TV' },
-            page: { type: 'number', default: 1 },
-            perPage: { type: 'number', default: 20, maximum: 50 },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -428,28 +309,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   );
   fastify.get(
     '/anime/mappings/:id',
-    {
-      schema: {
-        tags: ['AniList'],
-        summary: 'Get provider mappings',
-        description: 'Get external provider ID mappings for an anime.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: { id: { type: 'number', description: 'AniList ID' } },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            provider: {
-              type: 'string',
-              enum: ['anikoto', 'animepahe', 'anizone'],
-              default: 'anikoto',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -514,28 +374,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   );
   fastify.get(
     '/episodes/:id',
-    {
-      schema: {
-        tags: ['AniList'],
-        summary: 'Get anime episodes',
-        description: 'Get episodes from external provider.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: { id: { type: 'number', description: 'AniList ID' } },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            provider: {
-              type: 'string',
-              enum: ['anikoto', 'animepahe', 'anizone'],
-              default: 'anikoto',
-            },
-          },
-        },
-      },
-    },
 
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${0.5 * 60 * 60}, stale-while-revalidate=300`);

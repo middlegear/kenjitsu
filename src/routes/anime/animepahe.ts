@@ -14,22 +14,7 @@ const animepahe = new Animepahe(baseUrl, {
 export default async function AnimepaheRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/episodes/recent',
-    {
-      schema: {
-        tags: ['Animepahe'],
-        summary: 'Get Recent Episodes',
-        description: 'Retrieve a paginated list of recently released anime episodes.',
-        querystring: {
-          type: 'object',
-          properties: {
-            page: {
-              type: 'number',
-              description: 'The page number for pagination.',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
       const page = request.query.page || 1;
@@ -60,23 +45,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/search',
-    {
-      schema: {
-        tags: ['Animepahe'],
-        summary: 'Search Anime',
-        description: 'Search for anime titles by query string.',
-        querystring: {
-          type: 'object',
-          required: ['q'],
-          properties: {
-            q: {
-              type: 'string',
-              description: 'The search query string.',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
       const { q } = request.query;
@@ -107,20 +76,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/:id',
-    {
-      schema: {
-        tags: ['Animepahe'],
-        summary: 'Get Anime Information',
-        description: 'Fetches metadata and available episode listings for a specific anime by its ID.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: {
-            id: { type: 'string', description: 'The unique identifier of the anime.' },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
       const id = request.params.id;
@@ -169,23 +125,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/anime/:id/episodes',
-    {
-      schema: {
-        tags: ['Animepahe'],
-        summary: 'Get Anime Episodes by ID',
-        description: 'Retrieve a list of episodes belonging to a specific anime ID.',
-        params: {
-          type: 'object',
-          required: ['id'],
-          properties: {
-            id: {
-              type: 'string',
-              description: 'The unique identifier of the anime.',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
       const id = request.params.id;
@@ -221,17 +161,6 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/episode/:episodeId/servers',
-    {
-      schema: {
-        tags: ['Animepahe'],
-        summary: 'Get Episode Streaming and Download Servers',
-        params: {
-          type: 'object',
-          required: ['episodeId'],
-          properties: { episodeId: { type: 'string' } },
-        },
-      },
-    },
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${4 * 60 * 60}, stale-while-revalidate=300`);
@@ -263,34 +192,7 @@ export default async function AnimepaheRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/sources/:episodeId',
-    {
-      schema: {
-        tags: ['Animepahe'],
-        summary: 'Get Episode Video Sources',
-        description: 'Retrieve video streaming links and quality choices for a specific episode.',
-        params: {
-          type: 'object',
-          required: ['episodeId'],
-          properties: {
-            episodeId: {
-              type: 'string',
-              description: 'The unique identifier of the episode.',
-            },
-          },
-        },
-        querystring: {
-          type: 'object',
-          properties: {
-            version: {
-              type: 'string',
-              enum: ['sub', 'dub'],
-              default: 'sub',
-              description: 'The audio version.',
-            },
-          },
-        },
-      },
-    },
+
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
       const episodeId = request.params.episodeId;
