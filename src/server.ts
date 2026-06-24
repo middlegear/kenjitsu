@@ -13,12 +13,14 @@ import TheMovieDatabaseRoutes from './routes/meta/tmdb.js';
 import { ratelimitOptions, rateLimitPlugIn } from './config/ratelimit.js';
 import fastifyCors, { corsOptions } from './config/cors.js';
 import { checkRedis } from './config/redis.js';
+import { registerSwagger } from './config/swagger.js';
 
 events.defaultMaxListeners = 25;
 
 const app = Fastify({
   logger: {
     level: 'info',
+    timestamp: () => `,"time":"${new Date().toLocaleString()}"`,
     serializers: {
       req: req => ({
         method: req.method,
@@ -69,6 +71,7 @@ async function FastifyApp() {
   await checkRedis();
   await app.register(fastifyCors, corsOptions);
   await app.register(StaticRoutes);
+  await registerSwagger(app);
   await app.register(AnilistRoutes, { prefix: '/api/anilist' });
   await app.register(JikanRoutes, { prefix: '/api/jikan' });
   await app.register(TheMovieDatabaseRoutes, { prefix: '/api/tmdb' });
