@@ -1,11 +1,11 @@
 import 'dotenv/config';
-import { Anizone } from 'kenjitsu-extensions';
+import { Anizone } from '@middlegear/kenjitsu-extensions';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
-const baseUrl = process.env.ANIZONEURL || 'https://anizone.to';
-const anizone = new Anizone(baseUrl);
+// const baseUrl = process.env.ANIZONEURL || 'https://anizone.to';
+const anizone = new Anizone();
 
 export default async function AnizoneRoutes(fastify: FastifyInstance) {
   fastify.get(

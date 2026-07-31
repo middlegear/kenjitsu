@@ -3,34 +3,40 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import events from 'node:events';
 
 import StaticRoutes from './routes/static.js';
-import AnimepaheRoutes from './routes/anime/animepahe.js';
 import AnizoneRoutes from './routes/anime/anizone.js';
 import AnilistRoutes from './routes/meta/anilist.js';
-import AnikotoRoutes from './routes/anime/anikoto.js';
-import JikanRoutes from './routes/meta/jikan.js';
 import TheMovieDatabaseRoutes from './routes/meta/tmdb.js';
-
 import { ratelimitOptions, rateLimitPlugIn } from './config/ratelimit.js';
 import fastifyCors, { corsOptions } from './config/cors.js';
-import { checkRedis } from './config/redis.js';
+import { checkRedis, purgeCache } from './config/redis.js';
+
+import AnikotoRoutes from './routes/anime/anikoto.js';
+import AniDBRoutes from './routes/anime/anidb.js';
+import AnimeHeavenRoutes from './routes/anime/animeheaven.js';
+import AniBDRoutes from './routes/anime/anibd.js';
 
 events.defaultMaxListeners = 25;
 
 const app = Fastify({
   logger: {
     level: 'info',
-    timestamp: () => `,"time":"${new Date().toLocaleString()}"`,
     serializers: {
       req: req => ({
         method: req.method,
         url: req.url,
         query: req.query,
         params: req.params,
+        remoteAddress: req.socket.remoteAddress,
+        remotePort: req.socket.remotePort,
         headers: {
           'user-agent': req.headers['user-agent'],
+          'x-api-key': req.headers['x-api-key'],
           host: req.headers['host'],
           referer: req.headers['referer'],
           origin: req.headers['origin'],
+          'x-forwarded-for': req.headers['x-forwarded-for'],
+          'x-real-ip': req.headers['x-real-ip'],
+          'cf-connecting-ip': req.headers['cf-connecting-ip'],
         },
       }),
       error: error => ({
@@ -40,6 +46,7 @@ const app = Fastify({
       }),
       res: res => ({
         statusCode: res.statusCode,
+        responseTime: res.elapsedTime,
       }),
     },
   },
@@ -58,7 +65,26 @@ async function FastifyApp() {
       reply.header('Surrogate-Control', 'no-store');
     }
 
+    // Remove rate limit headers for successful requests
     if (status === 200) {
+      reply.removeHeader('x-ratelimit-remaining');
+      reply.removeHeader('x-ratelimit-reset');
+    }
+
+    return payload;
+  });
+  app.addHook('onSend', async (request: FastifyRequest, reply: FastifyReply, payload) => {
+    const status = reply.statusCode;
+
+    if (status !== 200) {
+      reply.removeHeader('Cache-Control');
+      reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      reply.header('Surrogate-Control', 'no-store');
+    }
+
+    /// remove rate limit headers since plugin doesnt work
+    if (status === 200) {
+      // reply.removeHeader('x-ratelimit-limit');
       reply.removeHeader('x-ratelimit-remaining');
       reply.removeHeader('x-ratelimit-reset');
     }
@@ -69,15 +95,15 @@ async function FastifyApp() {
 
   await checkRedis();
   await app.register(fastifyCors, corsOptions);
-  await app.register(StaticRoutes);
 
   await app.register(AnilistRoutes, { prefix: '/api/anilist' });
-  await app.register(JikanRoutes, { prefix: '/api/jikan' });
-  await app.register(TheMovieDatabaseRoutes, { prefix: '/api/tmdb' });
-  await app.register(AnimepaheRoutes, { prefix: '/api/animepahe' });
-  await app.register(AnizoneRoutes, { prefix: '/api/anizone' });
   await app.register(AnikotoRoutes, { prefix: '/api/anikoto' });
-
+  await app.register(AniDBRoutes, { prefix: '/api/anidb' });
+  await app.register(AniBDRoutes, { prefix: '/api/anibd' });
+  await app.register(AnizoneRoutes, { prefix: '/api/anizone' });
+  await app.register(AnimeHeavenRoutes, { prefix: '/api/animeheaven' });
+  await app.register(TheMovieDatabaseRoutes, { prefix: '/api/tmdb' });
+  await app.register(StaticRoutes);
   try {
     const port = parseInt(process.env.PORT || '3000', 10);
     const host = process.env.HOST || '0.0.0.0';
@@ -105,3 +131,4 @@ export default async function handler(request: FastifyRequest, reply: FastifyRep
   }
   app.server.emit('request', request, reply);
 }
+// purgeCache();

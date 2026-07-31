@@ -1,7 +1,7 @@
 export interface FastifyParams {
   id?: string;
+  chapterId?: string;
   episodeId?: string;
-  date?: string;
   sort?: string;
   genre?: string;
   country?: string;
@@ -11,9 +11,11 @@ export interface FastifyParams {
   status?: string;
   category?: string;
   format?: string;
+  date?: string;
 }
 
 export interface FastifyQuery {
+  score?: string;
   q?: string;
   year?: string;
   type?: string;
@@ -27,6 +29,7 @@ export interface FastifyQuery {
   country?: string;
   genre?: string;
   quality?: string;
+  hls?: string;
   timezone?: string;
 }
 
@@ -36,6 +39,11 @@ export const IAnimeCategoryArr = ['TV', 'MOVIE', 'SPECIALS', 'OVA', 'ONA'] as co
 
 export const IAnimeSeasonsArr = ['WINTER', 'SPRING', 'SUMMER', 'FALL'] as const;
 
-export const allowedAnimeProviders = ['animepahe', 'anizone', 'anikoto'];
+export const JSortArr = ['airing', 'bypopularity', 'upcoming', 'favorite', 'rating'] as const;
+
+export const allowedAnimeProviders = ['anikoto', , 'anizone', , 'anidb', 'anibd', 'animeheaven', 'kitsu'];
+
+export const allowedMangaProviders = ['comix', 'allmanga'];
 
 export const JikanList = ['favorite', 'popular', 'rating', 'airing', 'upcoming'] as const;
+export type AllAnimeServers = 'mp4upload' | 'internal-s-mp4' | 'internal-default-hls' | 'internal-yt-mp4';

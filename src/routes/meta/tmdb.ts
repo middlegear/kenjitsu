@@ -1,4 +1,4 @@
-import { TheMovieDatabase } from 'kenjitsu-extensions';
+import { TheMovieDatabase } from '@middlegear/kenjitsu-extensions';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { type FastifyParams, type FastifyQuery } from '../../utils/types.js';
@@ -7,34 +7,38 @@ import { redisGetCache, redisSetCache } from '../../config/redis.js';
 const tmdb = new TheMovieDatabase();
 
 export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
-  fastify.get('/movies/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
+  fastify.get(
+    '/movies/search',
 
-    const { q, page = 1 } = request.query;
+    async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
+      reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
 
-    if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
-    if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
+      const { q, page = 1 } = request.query;
 
-    const cacheKey = `tmdb-search-movie-${q}-${page}`;
-    const cachedData = await redisGetCache(cacheKey);
-    if (cachedData) return reply.status(200).send(cachedData);
+      if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
+      if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
 
-    try {
-      const result = await tmdb.searchMovie(q, page);
-      if (!result || typeof result !== 'object') {
-        return reply.status(502).send({ error: 'External provider returned an invalid response(null)' });
+      const cacheKey = `tmdb-search-movie-${q}-${page}`;
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) return reply.status(200).send(cachedData);
+
+      try {
+        const result = await tmdb.searchMovie(q, page);
+        if (!result || typeof result !== 'object') {
+          return reply.status(502).send({ error: 'External provider returned an invalid response(null)' });
+        }
+        if (result.error) {
+          return reply.status(result.status as number).send({ error: result.error });
+        }
+        if (result && Array.isArray(result.data) && result.data.length > 0) {
+          await redisSetCache(cacheKey, result, 168);
+        }
+        return reply.status(200).send(result);
+      } catch (error) {
+        return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
       }
-      if (result.error) {
-        return reply.status(result.status as number).send({ error: result.error });
-      }
-      if (result && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 168);
-      }
-      return reply.status(200).send(result);
-    } catch (error) {
-      return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
-    }
-  });
+    },
+  );
 
   fastify.get(
     '/tv/search',

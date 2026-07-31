@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Anilist, type Seasons, type IMetaFormat } from 'kenjitsu-extensions';
+import { Anilist, type Seasons, type IMetaFormat } from '@middlegear/kenjitsu-extensions';
 import {
   allowedAnimeProviders,
   IAMetaFormatArr,
@@ -8,7 +8,6 @@ import {
   type FastifyQuery,
 } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
-import { isValidDate } from '../../utils/utils.js';
 
 const anilist = new Anilist();
 
@@ -314,7 +313,17 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
-      const provider = (request.query.provider as 'anikoto' | 'animepahe' | 'anizone') || 'anikoto';
+      const provider =
+        (request.query.provider as
+          | 'allanime'
+          | 'anikoto'
+          | 'animepahe'
+          | 'anizone'
+          | 'aniwaves'
+          | 'anidb'
+          | 'anibd'
+          | 'animeheaven'
+          | 'kitsu') || 'anikoto';
 
       if (isNaN(id) || !id) {
         return reply.status(400).send({ error: "Missing or invalid 'id' parameter" });
@@ -330,14 +339,24 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       try {
         let result;
         switch (provider) {
-          case 'animepahe':
-            result = await anilist.fetchAnimepaheProviderId(id);
-            break;
           case 'anizone':
             result = await anilist.fetchAnizoneProviderId(id);
             break;
           case 'anikoto':
             result = await anilist.fetchAnikotoProviderId(id);
+            break;
+
+          case 'anibd':
+            result = await anilist.fetchAniBDProviderId(id);
+            break;
+          case 'anidb':
+            result = await anilist.fetchAniDBProviderId(id);
+            break;
+          case 'animeheaven':
+            result = await anilist.fetchAnimeHeavenProviderId(id);
+            break;
+          case 'kitsu':
+            result = await anilist.fetchKitsuProviderId(id);
             break;
           default:
             return reply.status(400).send({ error: `Invalid provider '${provider}'` });
@@ -361,10 +380,9 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           result.provider !== null &&
           status === 'finished' &&
           data.episodes !== null &&
-          format !== 'movie' &&
-          provider !== 'animepahe'
+          format !== 'movie'
         ) {
-          await redisSetCache(cacheKey, result, 0);
+          // await redisSetCache(cacheKey, result, 0);
         }
         return reply.status(200).send(result);
       } catch (error) {
@@ -374,12 +392,21 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   );
   fastify.get(
     '/episodes/:id',
-
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${0.5 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
-      const provider = (request.query.provider as 'anikoto' | 'animepahe' | 'anizone') || 'anikoto';
+      const provider =
+        (request.query.provider as
+          | 'allanime'
+          | 'anikoto'
+          | 'animepahe'
+          | 'anizone'
+          | 'aniwaves'
+          | 'anidb'
+          | 'anibd'
+          | 'animeheaven'
+          | 'kitsu') || 'anikoto';
 
       if (isNaN(id) || !id) {
         return reply.status(400).send({ error: "Missing or invalid 'id' parameter" });
@@ -395,14 +422,24 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       try {
         let result;
         switch (provider) {
-          case 'animepahe':
-            result = await anilist.fetchAnimepaheProviderEpisodes(id);
-            break;
           case 'anizone':
             result = await anilist.fetchAnizoneProviderEpisodes(id);
             break;
           case 'anikoto':
             result = await anilist.fetchAnikotoProviderEpisodes(id);
+            break;
+
+          case 'anibd':
+            result = await anilist.fetchAniBDProviderEpisodes(id);
+            break;
+          case 'anidb':
+            result = await anilist.fetchAniDBProviderEpisodes(id);
+            break;
+          case 'animeheaven':
+            result = await anilist.fetchAnimeHeavenProviderEpisodes(id);
+            break;
+          case 'kitsu':
+            result = await anilist.fetchKitsuProviderEpisodes(id);
             break;
           default:
             return reply.status(400).send({ error: `Invalid provider '${provider}'` });
@@ -424,9 +461,8 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         const isNotMovie = format !== 'movie';
         const isComplete = episodesFound >= episodesExpected && episodesExpected !== null;
 
-        let duration = isFinished ? 0 : 1.5;
-        if (isFinished && result.data && isNotMovie && isComplete && provider !== 'animepahe') {
-          await redisSetCache(cacheKey, result, duration);
+        if (isFinished && result.data && isNotMovie && isComplete) {
+          await redisSetCache(cacheKey, result, 0.3);
         }
         return reply.status(200).send(result);
       } catch (error) {
@@ -434,4 +470,16 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       }
     },
   );
+}
+
+function isValidDate(dateString: string): boolean {
+  const regEx = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+  if (!regEx.test(dateString)) return false;
+
+  const date = new Date(dateString);
+  const timestamp = date.getTime();
+
+  if (typeof timestamp !== 'number' || isNaN(timestamp)) return false;
+
+  return date.toISOString().startsWith(dateString);
 }
