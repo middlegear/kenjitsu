@@ -2,18 +2,18 @@
   "include": ["src"],
   "exclude": ["node_modules"],
   "compilerOptions": {
-    "outDir": "dist", // added recently to test a build step lets see
-    "target": "esnext" ,
+    "outDir": "dist",
+    "rootDir": "src",
+    "target": "esnext",
     "module": "nodenext",
     "moduleResolution": "nodenext",   
-    "isolatedModules": true, // changed from false 
-    "esModuleInterop": true ,
+    "isolatedModules": true,
+    "esModuleInterop": true,
     "moduleDetection": "force",
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "noUncheckedIndexedAccess": true, 
-    "lib": ["ESNext"],
-    
+    "lib": ["ESNext"]
   }
 }

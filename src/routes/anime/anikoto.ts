@@ -5,7 +5,7 @@ import { type FastifyQuery, type FastifyParams, IAMetaFormatArr, IAnimeCategoryA
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
 const baseUrl = process.env.ANIKOTOURL || 'https://anikototv.to';
-const anikoto = new Anikoto(baseUrl, { browser: 'firefox144' });
+const anikoto = new Anikoto(baseUrl);
 
 export default async function AnikotoRoutes(fastify: FastifyInstance) {
   fastify.get(

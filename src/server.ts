@@ -1,5 +1,11 @@
 import 'dotenv/config';
-import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
+import Fastify, {
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+  type FastifyServerOptions,
+  type RawServerDefault,
+} from 'fastify';
 import events from 'node:events';
 
 import StaticRoutes from './routes/static.js';
@@ -17,9 +23,13 @@ import AniBDRoutes from './routes/anime/anibd.js';
 
 events.defaultMaxListeners = 25;
 
-const app = Fastify({
+const useHttp2 = process.env.ENABLE_HTTP2 === 'true';
+
+const app: FastifyInstance = Fastify({
+  http2: useHttp2,
   logger: {
     level: 'info',
+    timestamp: () => `,"time":"${new Date().toLocaleString()}"`,
     serializers: {
       req: req => ({
         method: req.method,
@@ -53,7 +63,7 @@ const app = Fastify({
   routerOptions: {
     maxParamLength: 1000,
   },
-});
+} as FastifyServerOptions<RawServerDefault>);
 
 async function FastifyApp() {
   app.addHook('onSend', async (request: FastifyRequest, reply: FastifyReply, payload) => {

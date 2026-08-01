@@ -5,3 +5,4 @@ build
 coverage
 *json
 node_modules/
+*.yaml

@@ -4,7 +4,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
-const animeheaven = new AnimeHeaven();
+const baseUrl = process.env.ANIMEHEAVENURL || 'https://animeheaven.me';
+const animeheaven = new AnimeHeaven(baseUrl);
 
 export default async function AnimeHeavenRoutes(fastify: FastifyInstance) {
   fastify.get(

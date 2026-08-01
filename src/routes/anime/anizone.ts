@@ -4,8 +4,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
-// const baseUrl = process.env.ANIZONEURL || 'https://anizone.to';
-const anizone = new Anizone();
+const baseUrl = process.env.ANIZONEURL || 'https://anizone.to';
+const anizone = new Anizone(baseUrl);
 
 export default async function AnizoneRoutes(fastify: FastifyInstance) {
   fastify.get(

@@ -54,10 +54,10 @@
     "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^8.3.0",
-    "@middlegear/kenjitsu-extensions": "latest",
+    "@middlegear/kenjitsu-extensions": "2026.8.1-2216",
     "dotenv": "^17.4.2",
     "fastify": "^5.11.0",
     "ioredis": "^5.11.1"
   },
-  "packageManager": "pnpm@10.33.2+sha512.a90faf6feeab71ad6c6e57f94e0fe1a12f5dcc22cd754db40ae9593eb6a3e0b6b12e3540218bb37ae083404b1f2ce6db2a4121e979829b4aff94b99f49da1cf8"
+  "packageManager": "pnpm@11.18.0+sha512.33d83c77da82f49fba836925c6f1b841181ec3132b670639bd012f7075f5c7cf634c5f870147c19aae7478fac01df09d8892e880454896edd23ee9b33757563c"
 }

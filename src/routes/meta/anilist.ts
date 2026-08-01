@@ -313,17 +313,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
-      const provider =
-        (request.query.provider as
-          | 'allanime'
-          | 'anikoto'
-          | 'animepahe'
-          | 'anizone'
-          | 'aniwaves'
-          | 'anidb'
-          | 'anibd'
-          | 'animeheaven'
-          | 'kitsu') || 'anikoto';
+      const provider = request.query.provider as 'anikoto' | 'anizone' | 'anidb' | 'anibd' | 'animeheaven' | 'kitsu';
 
       if (isNaN(id) || !id) {
         return reply.status(400).send({ error: "Missing or invalid 'id' parameter" });
@@ -349,6 +339,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           case 'anibd':
             result = await anilist.fetchAniBDProviderId(id);
             break;
+
           case 'anidb':
             result = await anilist.fetchAniDBProviderId(id);
             break;
@@ -382,87 +373,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           data.episodes !== null &&
           format !== 'movie'
         ) {
-          // await redisSetCache(cacheKey, result, 0);
-        }
-        return reply.status(200).send(result);
-      } catch (error) {
-        return reply.status(500).send({ error: 'Internal server error' });
-      }
-    },
-  );
-  fastify.get(
-    '/episodes/:id',
-    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${0.5 * 60 * 60}, stale-while-revalidate=300`);
-
-      const id = Number(request.params.id);
-      const provider =
-        (request.query.provider as
-          | 'allanime'
-          | 'anikoto'
-          | 'animepahe'
-          | 'anizone'
-          | 'aniwaves'
-          | 'anidb'
-          | 'anibd'
-          | 'animeheaven'
-          | 'kitsu') || 'anikoto';
-
-      if (isNaN(id) || !id) {
-        return reply.status(400).send({ error: "Missing or invalid 'id' parameter" });
-      }
-      if (!allowedAnimeProviders.includes(provider)) {
-        return reply.status(400).send({ error: `Invalid provider '${provider}'` });
-      }
-
-      const cacheKey = `anilist-episodes-${id}-${provider}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
-
-      try {
-        let result;
-        switch (provider) {
-          case 'anizone':
-            result = await anilist.fetchAnizoneProviderEpisodes(id);
-            break;
-          case 'anikoto':
-            result = await anilist.fetchAnikotoProviderEpisodes(id);
-            break;
-
-          case 'anibd':
-            result = await anilist.fetchAniBDProviderEpisodes(id);
-            break;
-          case 'anidb':
-            result = await anilist.fetchAniDBProviderEpisodes(id);
-            break;
-          case 'animeheaven':
-            result = await anilist.fetchAnimeHeavenProviderEpisodes(id);
-            break;
-          case 'kitsu':
-            result = await anilist.fetchKitsuProviderEpisodes(id);
-            break;
-          default:
-            return reply.status(400).send({ error: `Invalid provider '${provider}'` });
-        }
-
-        if (!result || typeof result !== 'object') {
-          return reply.status(502).send({ error: 'Invalid response from AniList' });
-        }
-        if (result.error || result.data === null || result.providerEpisodes?.length === 0) {
-          return reply.status(result.status as number).send({ error: result.error });
-        }
-
-        const status = result?.data?.status?.toLowerCase();
-        const format = result?.data?.format?.toLowerCase();
-        const episodesFound = result?.providerEpisodes?.length || 0;
-        const episodesExpected = result?.data?.episodes;
-
-        const isFinished = status === 'finished';
-        const isNotMovie = format !== 'movie';
-        const isComplete = episodesFound >= episodesExpected && episodesExpected !== null;
-
-        if (isFinished && result.data && isNotMovie && isComplete) {
-          await redisSetCache(cacheKey, result, 0.3);
+          await redisSetCache(cacheKey, result, 24);
         }
         return reply.status(200).send(result);
       } catch (error) {

@@ -4,7 +4,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
-const anibd = new AniBD();
+const baseUrl = process.env.ANIBDURL || 'https://anibd.app';
+const anibd = new AniBD(baseUrl);
 
 export default async function AniBDRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
