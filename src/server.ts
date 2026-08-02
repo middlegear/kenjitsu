@@ -26,7 +26,6 @@ events.defaultMaxListeners = 25;
 const useHttp2 = process.env.ENABLE_HTTP2 === 'true';
 
 const app: FastifyInstance = Fastify({
-  http2: useHttp2,
   logger: {
     level: 'info',
     timestamp: () => `,"time":"${new Date().toLocaleString()}"`,

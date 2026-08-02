@@ -198,6 +198,34 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       }
     },
   );
+
+  fastify.get('/anime/:id/franchise', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
+    reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
+
+    const id = request.params.id;
+    if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
+
+    const cacheKey = `anilist-franchise-${id}`;
+    const cachedData = await redisGetCache(cacheKey);
+    if (cachedData) return reply.status(200).send(cachedData);
+
+    try {
+      const result = await anilist.fetchParentSeries(Number(id));
+      if (!result || typeof result !== 'object') {
+        return reply.status(502).send({ error: 'Invalid response' });
+      }
+      if (result.error) {
+        return reply.status(result.status as number).send({ error: result.error });
+      }
+
+      if (result?.data?.length > 0) {
+        await redisSetCache(cacheKey, result, 336);
+      }
+      return reply.status(200).send(result);
+    } catch (error) {
+      return reply.status(500).send({ error: 'Internal server error' });
+    }
+  });
   fastify.get(
     '/airing/date/:date',
 
@@ -232,7 +260,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   );
 
   fastify.get(
-    '/anime/schedule/:id',
+    '/anime/:id/schedule',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
@@ -264,7 +292,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   );
   fastify.get(
     '/seasons/:season/:year',
-
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
 
@@ -307,7 +334,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     },
   );
   fastify.get(
-    '/anime/mappings/:id',
+    '/anime/:id/mappings',
 
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
