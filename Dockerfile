@@ -1,62 +1,56 @@
 # ==========================================
 #  Build Stage
 # ==========================================
-FROM node:24-slim AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
+COPY package*.json tsconfig.json ./
 
-COPY package*.json tsconfig.json .npmrc ./
 
+RUN --mount=type=secret,id=npm_token \
+    if [ -f /run/secrets/npm_token ]; then \
+      npm config set //npm.pkg.github.com/:_authToken="$(cat /run/secrets/npm_token)"; \
+    fi && \
+    npm ci && \
+    npm config delete //npm.pkg.github.com/:_authToken || true
 
-ARG NPM_TOKEN
-RUN if [ -n "$NPM_TOKEN" ]; then \
-      npm config set //npm.pkg.github.com/:_authToken=$NPM_TOKEN; \
-    fi
-
-RUN npm install
-
-# dist-tag (latest | nightly)
+# dist-tag: latest (stable) | nightly
 ARG EXTENSION_TAG=latest
-RUN npm install @middlegear/kenjitsu-extensions@${EXTENSION_TAG}
+RUN --mount=type=secret,id=npm_token \
+    if [ -f /run/secrets/npm_token ]; then \
+      npm config set //npm.pkg.github.com/:_authToken="$(cat /run/secrets/npm_token)"; \
+    fi && \
+    npm install @middlegear/kenjitsu-extensions@${EXTENSION_TAG} && \
+    npm config delete //npm.pkg.github.com/:_authToken || true
 
-# Copy full source code
 COPY . .
 
-# Build TypeScript
 RUN npm run build
+
+
+RUN npm prune --omit=dev && npm cache clean --force
 
 
 # ==========================================
 #  Runtime Stage
 # ==========================================
-FROM node:24-slim
+FROM node:24-alpine
 
 WORKDIR /app
 
-# Copy only build output and essentials
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/public ./public
-COPY package*.json .npmrc ./
-
-# Configure npm again for GitHub Packages (optional)
-ARG NPM_TOKEN
-RUN if [ -n "$NPM_TOKEN" ]; then \
-      npm config set //npm.pkg.github.com/:_authToken=$NPM_TOKEN; \
-    fi
-
-# Install only production dependencies
-RUN npm install --omit=dev
-
-# Re-pin extensions package to the same dist-tag used in the build stage
-ARG EXTENSION_TAG=latest
-RUN npm install @middlegear/kenjitsu-extensions@${EXTENSION_TAG} --omit=dev
-
-# Environment configuration
 ENV NODE_ENV=production
 ENV PORT=3000
 
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+COPY --from=builder --chown=appuser:appgroup /app/public ./public
+COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appgroup /app/package*.json ./
+
+USER appuser
+
 EXPOSE 3000
 
-# Start the server
 CMD ["node", "dist/server.js"]
