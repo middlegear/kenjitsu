@@ -23,7 +23,7 @@ import AniBDRoutes from './routes/anime/anibd.js';
 
 events.defaultMaxListeners = 25;
 
-const useHttp2 = process.env.ENABLE_HTTP2 === 'true';
+const API_KEY = process.env.API_KEY;
 
 const app: FastifyInstance = Fastify({
   logger: {
@@ -39,7 +39,7 @@ const app: FastifyInstance = Fastify({
         remotePort: req.socket.remotePort,
         headers: {
           'user-agent': req.headers['user-agent'],
-          'x-api-key': req.headers['x-api-key'],
+          'x-api-key': req.headers['x-api-key'] ? '[present]' : '[missing]',
           host: req.headers['host'],
           referer: req.headers['referer'],
           origin: req.headers['origin'],
@@ -65,39 +65,21 @@ const app: FastifyInstance = Fastify({
 } as FastifyServerOptions<RawServerDefault>);
 
 async function FastifyApp() {
-  app.addHook('onSend', async (request: FastifyRequest, reply: FastifyReply, payload) => {
-    const status = reply.statusCode;
-
-    if (status !== 200) {
-      reply.removeHeader('Cache-Control');
-      reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-      reply.header('Surrogate-Control', 'no-store');
+  app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.url.startsWith('/api')) {
+      return;
     }
 
-    // Remove rate limit headers for successful requests
-    if (status === 200) {
-      reply.removeHeader('x-ratelimit-remaining');
-      reply.removeHeader('x-ratelimit-reset');
+    if (!API_KEY) {
+      return;
     }
 
-    return payload;
-  });
-  app.addHook('onSend', async (request: FastifyRequest, reply: FastifyReply, payload) => {
-    const status = reply.statusCode;
+    const apiKeyHeader = request.headers['x-api-key'];
+    const apiKey = Array.isArray(apiKeyHeader) ? apiKeyHeader[0] : apiKeyHeader;
 
-    if (status !== 200) {
-      reply.removeHeader('Cache-Control');
-      reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-      reply.header('Surrogate-Control', 'no-store');
+    if (!apiKey || apiKey !== API_KEY) {
+      return reply.code(401).send({ error: 'Unauthorized' });
     }
-
-    /// remove rate limit headers since plugin doesnt work
-    if (status === 200) {
-      // reply.removeHeader('x-ratelimit-limit');
-      reply.removeHeader('x-ratelimit-remaining');
-      reply.removeHeader('x-ratelimit-reset');
-    }
-    return payload;
   });
 
   await app.register(rateLimitPlugIn, ratelimitOptions);
