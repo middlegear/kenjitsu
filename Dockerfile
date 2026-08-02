@@ -7,9 +7,9 @@ WORKDIR /app
 
 COPY package*.json tsconfig.json ./
 
-RUN --mount=type=secret,id=npm_token \
-    if [ -f /run/secrets/npm_token ]; then \
-      npm config set //npm.pkg.github.com/:_authToken="$(cat /run/secrets/npm_token)"; \
+ARG NPM_TOKEN
+RUN if [ -n "$NPM_TOKEN" ]; then \
+      npm config set //npm.pkg.github.com/:_authToken="$NPM_TOKEN"; \
     fi && \
     npm config set @middlegear:registry https://npm.pkg.github.com && \
     npm install && \
@@ -17,9 +17,8 @@ RUN --mount=type=secret,id=npm_token \
 
 # dist-tag: latest (stable) | nightly
 ARG EXTENSION_TAG=latest
-RUN --mount=type=secret,id=npm_token \
-    if [ -f /run/secrets/npm_token ]; then \
-      npm config set //npm.pkg.github.com/:_authToken="$(cat /run/secrets/npm_token)"; \
+RUN if [ -n "$NPM_TOKEN" ]; then \
+      npm config set //npm.pkg.github.com/:_authToken="$NPM_TOKEN"; \
     fi && \
     npm install @middlegear/kenjitsu-extensions@${EXTENSION_TAG} && \
     npm config delete //npm.pkg.github.com/:_authToken || true
