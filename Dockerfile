@@ -7,12 +7,12 @@ WORKDIR /app
 
 COPY package*.json tsconfig.json ./
 
-
 RUN --mount=type=secret,id=npm_token \
     if [ -f /run/secrets/npm_token ]; then \
       npm config set //npm.pkg.github.com/:_authToken="$(cat /run/secrets/npm_token)"; \
     fi && \
-    npm ci && \
+    npm config set @middlegear:registry https://npm.pkg.github.com && \
+    npm install && \
     npm config delete //npm.pkg.github.com/:_authToken || true
 
 # dist-tag: latest (stable) | nightly
@@ -27,7 +27,6 @@ RUN --mount=type=secret,id=npm_token \
 COPY . .
 
 RUN npm run build
-
 
 RUN npm prune --omit=dev && npm cache clean --force
 
