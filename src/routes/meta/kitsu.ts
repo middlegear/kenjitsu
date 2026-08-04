@@ -55,7 +55,7 @@ export default async function KitsuRoutes(fastify: FastifyInstance) {
       try {
         const result = await kitsu.fetchInfo(id);
         if (!result || typeof result !== 'object') {
-          return reply.status(502).send({ error: 'Invalid response from AniList' });
+          return reply.status(502).send({ error: 'Invalid response' });
         }
         if (result.error) {
           return reply.status(result.status as number).send({ error: result.error });
@@ -88,7 +88,7 @@ export default async function KitsuRoutes(fastify: FastifyInstance) {
         const result = await kitsu.fetchEpisodes(id);
 
         if (!result || typeof result !== 'object') {
-          return reply.status(502).send({ error: 'Invalid response from AniList' });
+          return reply.status(502).send({ error: 'Invalid response' });
         }
         if (result.error) {
           return reply.status(result.status as number).send({ error: result.error });
@@ -96,6 +96,39 @@ export default async function KitsuRoutes(fastify: FastifyInstance) {
 
         if (result?.data?.length > 0) {
           await redisSetCache(cacheKey, result, 2);
+        }
+        return reply.status(200).send(result);
+      } catch (error) {
+        return reply.status(500).send({ error: 'Internal server error' });
+      }
+    },
+  );
+
+  fastify.get(
+    '/anime/:id/mappings',
+
+    async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
+      reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
+
+      const id = Number(request.params.id);
+      if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
+
+      const cacheKey = `kitsu-mapping-${id}`;
+      const cachedData = await redisGetCache(cacheKey);
+      if (cachedData) return reply.status(200).send(cachedData);
+
+      try {
+        const result = await kitsu.fetchMapping(id);
+
+        if (!result || typeof result !== 'object') {
+          return reply.status(502).send({ error: 'Invalid response' });
+        }
+        if (result.error) {
+          return reply.status(result.status as number).send({ error: result.error });
+        }
+
+        if (result?.data) {
+          await redisSetCache(cacheKey, result, 24);
         }
         return reply.status(200).send(result);
       } catch (error) {
