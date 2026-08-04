@@ -400,7 +400,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           data.episodes !== null &&
           format !== 'movie'
         ) {
-          await redisSetCache(cacheKey, result, 24);
+          await redisSetCache(cacheKey, result, 168);
         }
         return reply.status(200).send(result);
       } catch (error) {
