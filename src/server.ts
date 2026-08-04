@@ -20,6 +20,7 @@ import AnikotoRoutes from './routes/anime/anikoto.js';
 import AniDBRoutes from './routes/anime/anidb.js';
 import AnimeHeavenRoutes from './routes/anime/animeheaven.js';
 import AniBDRoutes from './routes/anime/anibd.js';
+import KitsuRoutes from './routes/meta/kitsu.js';
 
 events.defaultMaxListeners = 25;
 
@@ -88,6 +89,7 @@ async function FastifyApp() {
   await app.register(fastifyCors, corsOptions);
 
   await app.register(AnilistRoutes, { prefix: '/api/anilist' });
+  await app.register(KitsuRoutes, { prefix: '/api/kitsu' });
   await app.register(AnikotoRoutes, { prefix: '/api/anikoto' });
   await app.register(AniDBRoutes, { prefix: '/api/anidb' });
   await app.register(AniBDRoutes, { prefix: '/api/anibd' });
