@@ -54,7 +54,7 @@
     "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^8.3.0",
-    "@middlegear/kenjitsu-extensions": "2026.8.4-1358",
+    "@middlegear/kenjitsu-extensions": "2026.8.4-2010",
     "dotenv": "^17.4.2",
     "fastify": "^5.11.0",
     "ioredis": "^5.11.1"

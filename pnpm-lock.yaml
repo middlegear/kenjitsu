@@ -18,8 +18,8 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0
       '@middlegear/kenjitsu-extensions':
-        specifier: 2026.8.4-1358
-        version: 2026.8.4-1358
+        specifier: 2026.8.4-2010
+        version: 2026.8.4-2010
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -278,8 +278,8 @@ packages:
     resolution: {integrity: sha512-9I2Zn6+NJLfaGoz9jN3lpwDgAYvfGeNYdbAIjJOqzs4Tpc+VU3Jqq4IofSUBKajiDS8k9fZIg18/z13mpk1bsA==}
     engines: {node: '>=8'}
 
-  '@middlegear/kenjitsu-extensions@2026.8.4-1358':
-    resolution: {integrity: sha512-ynf4tkL89XuHSaISyaXhwTd3airt/e89f5SMNdjjdSKoM5i8j/XRAvxtWHNU5+6Q/H3aL2i0cuEFz+caQnl+pw==, tarball: https://npm.pkg.github.com/download/@middlegear/kenjitsu-extensions/2026.8.4-1358/3fd0617a1ef3504fb6fdc012141ddfe3908bd5c7}
+  '@middlegear/kenjitsu-extensions@2026.8.4-2010':
+    resolution: {integrity: sha512-LqFb3WLfTkE7zdyTbr7hRmBl9UXR4Vyuob77OmDCaScaebY1vMsI7JMV5Kx5xGmrMFlCkvVjHMmUTKUKSiXEjg==, tarball: https://npm.pkg.github.com/download/@middlegear/kenjitsu-extensions/2026.8.4-2010/4b28e6085d08fbeec2b90e4433dd648976c25619}
 
   '@octokit/auth-token@6.0.0':
     resolution: {integrity: sha512-P4YJBPdPSpWTQ1NU4XYdvHvXJJDxM6YwpS0FZHRgP7YFkdVxsWcpWGy/NVqlAA7PcPCnMacXlRm1y2PFZRWL/w==}
@@ -2042,7 +2042,7 @@ snapshots:
 
   '@lukeed/ms@2.0.2': {}
 
-  '@middlegear/kenjitsu-extensions@2026.8.4-1358':
+  '@middlegear/kenjitsu-extensions@2026.8.4-2010':
     dependencies:
       cheerio: 1.2.0
       fastest-levenshtein: 1.0.16
