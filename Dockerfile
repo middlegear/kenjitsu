@@ -15,12 +15,12 @@ RUN if [ -n "$NPM_TOKEN" ]; then \
     npm install && \
     npm config delete //npm.pkg.github.com/:_authToken || true
 
-# dist-tag: latest (stable) | nightly
-ARG EXTENSION_TAG=latest
+
+ARG NPM_TOKEN
 RUN if [ -n "$NPM_TOKEN" ]; then \
       npm config set //npm.pkg.github.com/:_authToken="$NPM_TOKEN"; \
     fi && \
-    npm install @middlegear/kenjitsu-extensions@${EXTENSION_TAG} && \
+    npm install @middlegear/kenjitsu-extensions@nightly && \
     npm config delete //npm.pkg.github.com/:_authToken || true
 
 COPY . .
