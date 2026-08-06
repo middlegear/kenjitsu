@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  packages: write
   contents: read
+  packages: write
 
 jobs:
   docker:
@@ -28,8 +28,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/kenjitsu:nightly
-          build-args: |
-            NPM_TOKEN=${{ secrets.GH_PACKAGES_TOKEN }}
-            EXTENSION_TAG=nightly
+          tags: ghcr.io/${{ github.repository_owner }}/kenjitsu:nightly

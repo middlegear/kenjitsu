@@ -1,5 +1,5 @@
 # ==========================================
-#  Build Stage
+# Build Stage
 # ==========================================
 FROM node:24-alpine AS builder
 
@@ -7,31 +7,17 @@ WORKDIR /app
 
 COPY package*.json tsconfig.json ./
 
-ARG NPM_TOKEN
-RUN if [ -n "$NPM_TOKEN" ]; then \
-      npm config set //npm.pkg.github.com/:_authToken="$NPM_TOKEN"; \
-    fi && \
-    npm config set @middlegear:registry https://npm.pkg.github.com && \
-    npm install && \
-    npm config delete //npm.pkg.github.com/:_authToken || true
-
-
-ARG NPM_TOKEN
-RUN if [ -n "$NPM_TOKEN" ]; then \
-      npm config set //npm.pkg.github.com/:_authToken="$NPM_TOKEN"; \
-    fi && \
-    npm install @middlegear/kenjitsu-extensions@nightly && \
-    npm config delete //npm.pkg.github.com/:_authToken || true
+RUN npm install
 
 COPY . .
 
 RUN npm run build
 
-RUN npm prune --omit=dev && npm cache clean --force
-
+RUN npm prune --omit=dev \
+ && npm cache clean --force
 
 # ==========================================
-#  Runtime Stage
+# Runtime Stage
 # ==========================================
 FROM node:24-alpine
 
@@ -40,7 +26,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN addgroup -S appgroup \
+ && adduser -S appuser -G appgroup
 
 COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
 COPY --from=builder --chown=appuser:appgroup /app/public ./public
