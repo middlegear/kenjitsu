@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Kitsu } from '@middlegear/kenjitsu-extensions';
+import { Kitsu,Cinemeta } from '@middlegear/kenjitsu-extensions';
 import { type FastifyParams, type FastifyQuery } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
 const kitsu = new Kitsu();
-
+const cinementa = new Cinemeta()
 export default async function KitsuRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/anime/search',
@@ -80,13 +80,13 @@ export default async function KitsuRoutes(fastify: FastifyInstance) {
       const id = Number(request.params.id);
       if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
 
-      const cacheKey = `kitsu-episodes-${id}`;
+      const cacheKey = `kitsu-episodes--cinemeta-${id}`;
       const cachedData = await redisGetCache(cacheKey);
       if (cachedData) return reply.status(200).send(cachedData);
 
       try {
-        const result = await kitsu.fetchEpisodes(id);
-
+        const result = await cinementa.fetchAnimeEpisodes(id);
+        // const result = await kitsu.fetchEpisodes(id);
         if (!result || typeof result !== 'object') {
           return reply.status(502).send({ error: 'Invalid response' });
         }

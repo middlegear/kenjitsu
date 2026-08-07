@@ -19,7 +19,7 @@ importers:
         version: 10.1.2
       '@middlegear/kenjitsu-extensions':
         specifier: github:middlegear/kenjitsu-extensions#main
-        version: kenjitsu-extensions@https://codeload.github.com/middlegear/kenjitsu-extensions/tar.gz/1d86702836889ff6e0a860a64acc8056376522f5
+        version: kenjitsu-extensions@https://codeload.github.com/middlegear/kenjitsu-extensions/tar.gz/61896a7e727de97875a27f70cf704a42ecf731ef
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -46,8 +46,8 @@ importers:
         specifier: ^25.0.9
         version: 25.0.9(typescript@5.9.3)
       tsx:
-        specifier: ^4.23.9
-        version: 4.23.9
+        specifier: ^4.23.11
+        version: 4.23.11
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -1059,8 +1059,8 @@ packages:
   jsonfile@6.2.1:
     resolution: {integrity: sha512-zwOTdL3rFQ/lRdBnntKVOX6k5cKJwEc1HdilT71BWEu7J41gXIB2MRp+vxduPSwZJPWBxEzv4yH1wYLJGUHX4Q==}
 
-  kenjitsu-extensions@https://codeload.github.com/middlegear/kenjitsu-extensions/tar.gz/1d86702836889ff6e0a860a64acc8056376522f5:
-    resolution: {tarball: https://codeload.github.com/middlegear/kenjitsu-extensions/tar.gz/1d86702836889ff6e0a860a64acc8056376522f5}
+  kenjitsu-extensions@https://codeload.github.com/middlegear/kenjitsu-extensions/tar.gz/61896a7e727de97875a27f70cf704a42ecf731ef:
+    resolution: {tarball: https://codeload.github.com/middlegear/kenjitsu-extensions/tar.gz/61896a7e727de97875a27f70cf704a42ecf731ef}
     version: 0.0.0-development
 
   light-my-request@6.6.0:
@@ -1720,8 +1720,8 @@ packages:
     resolution: {integrity: sha512-aXJDbk6SnumuaZSANd21XAo15ucCDE38H4fkqiGsc3MhCK+wOlZvLP9cB/TvpHT0mOyWgC4Z8EwRlzqYSUzdsA==}
     engines: {node: '>= 0.4'}
 
-  tsx@4.23.9:
-    resolution: {integrity: sha512-6q8uTORRGauQVjqMQnKUucLFoeXZAfw6zKvG35GLbdKWbLdeOtZ3H4mhyA5mxuUd2o2cRTskhj59nLLQseUvUw==}
+  tsx@4.23.11:
+    resolution: {integrity: sha512-Ry2oTEUnhBdeEdWIztY8kf3/nBGnPnjMLVGL0YfdRXMORuPER5NlKmayqxtxRxwB1xBN+RivRaJfe7PM1rtiyw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -2869,7 +2869,7 @@ snapshots:
     optionalDependencies:
       graceful-fs: 4.2.11
 
-  kenjitsu-extensions@https://codeload.github.com/middlegear/kenjitsu-extensions/tar.gz/1d86702836889ff6e0a860a64acc8056376522f5:
+  kenjitsu-extensions@https://codeload.github.com/middlegear/kenjitsu-extensions/tar.gz/61896a7e727de97875a27f70cf704a42ecf731ef:
     dependencies:
       cheerio: 1.2.0
       fastest-levenshtein: 1.0.16
@@ -3449,7 +3449,7 @@ snapshots:
 
   traverse@0.6.8: {}
 
-  tsx@4.23.9:
+  tsx@4.23.11:
     dependencies:
       esbuild: 0.28.1
     optionalDependencies:
