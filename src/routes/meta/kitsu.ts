@@ -85,8 +85,8 @@ export default async function KitsuRoutes(fastify: FastifyInstance) {
       if (cachedData) return reply.status(200).send(cachedData);
 
       try {
-        // const result = await cinementa.fetchAnimeEpisodes(id);
-        const result = await kitsu.fetchEpisodes(id);
+        const result = await cinementa.fetchAnimeEpisodes(id);
+        // const result = await kitsu.fetchEpisodes(id);
         if (!result || typeof result !== 'object') {
           return reply.status(502).send({ error: 'Invalid response' });
         }
