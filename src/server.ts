@@ -124,4 +124,4 @@ export default async function handler(request: FastifyRequest, reply: FastifyRep
   }
   app.server.emit('request', request, reply);
 }
-purgeCache();
+// purgeCache();
