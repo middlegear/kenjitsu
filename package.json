@@ -47,7 +47,7 @@
     "@types/node": "^24.13.3",
     "prettier": "^3.9.6",
     "semantic-release": "^25.0.9",
-    "tsx": "^4.23.11",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.3"
   },
   "dependencies": {
@@ -56,7 +56,7 @@
     "@fastify/static": "10.1.2",
     "@middlegear/kenjitsu-extensions": "github:middlegear/kenjitsu-extensions#main",
     "dotenv": "^17.4.2",
-    "fastify": "^5.11.2",
+    "fastify": "^5.12.0",
     "ioredis": "^5.11.1"
   },
   "packageManager": "pnpm@10.17.1+sha512.17c560fca4867ae9473a3899ad84a88334914f379be46d455cbf92e5cf4b39d34985d452d2583baf19967fa76cb5c17bc9e245529d0b98745721aa7200ecaf7a"

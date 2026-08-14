@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Kitsu, Cinemeta } from '@middlegear/kenjitsu-extensions';
+import { Kitsu } from '@middlegear/kenjitsu-extensions';
 import { type FastifyParams, type FastifyQuery } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
 const kitsu = new Kitsu();
-const cinementa = new Cinemeta();
+
 export default async function KitsuRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/anime/search',
@@ -85,7 +85,6 @@ export default async function KitsuRoutes(fastify: FastifyInstance) {
       if (cachedData) return reply.status(200).send(cachedData);
 
       try {
-        // const result = await cinementa.fetchAnimeEpisodes(id);
         const result = await kitsu.fetchEpisodes(id);
         if (!result || typeof result !== 'object') {
           return reply.status(502).send({ error: 'Invalid response' });
