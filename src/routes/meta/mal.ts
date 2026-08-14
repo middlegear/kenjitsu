@@ -5,7 +5,7 @@ import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
 const mal = new MyAnimeList();
 
-export default async function KitsuRoutes(fastify: FastifyInstance) {
+export default async function MyAnimeListRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/anime/search',
 
