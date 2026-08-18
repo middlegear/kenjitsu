@@ -198,6 +198,33 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       }
     },
   );
+  fastify.get('/anime/:id/episodes', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
+    reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
+
+    const id = request.params.id;
+    if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
+
+    const cacheKey = `anilist-episodes-${id}`;
+    const cachedData = await redisGetCache(cacheKey);
+    if (cachedData) return reply.status(200).send(cachedData);
+
+    try {
+      const result = await anilist.fetchEpisodes(Number(id));
+      if (!result || typeof result !== 'object') {
+        return reply.status(502).send({ error: 'Invalid response' });
+      }
+      if (result.error) {
+        return reply.status(result.status as number).send({ error: result.error });
+      }
+
+      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+        await redisSetCache(cacheKey, result, 24);
+      }
+      return reply.status(200).send(result);
+    } catch (error) {
+      return reply.status(500).send({ error: 'Internal server error' });
+    }
+  });
 
   fastify.get('/anime/:id/franchise', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
     reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);

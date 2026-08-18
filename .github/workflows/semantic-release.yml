@@ -29,7 +29,7 @@ jobs:
           node-version: "24"
           registry-url: https://npm.pkg.github.com
 
-      - name:  GitHub Packages Auth
+      - name: GitHub Packages Auth
         run: |
           echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
         env:
@@ -50,63 +50,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: pnpm exec semantic-release
-
-      - name: Check if a release was published
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          if gh release list \
-            --repo "$GITHUB_REPOSITORY" \
-            --limit 1 \
-            --json tagName \
-            --jq '.[0].tagName' >/dev/null 2>&1; then
-            echo "published=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "published=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Append kenjitsu-extensions release notes
-        if: steps.release.outputs.published == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          EXT_REPO="middlegear/kenjitsu-extensions"
-
-          EXT_TAG="$(gh release view \
-            --repo "$EXT_REPO" \
-            --json tagName \
-            --jq '.tagName')"
-
-          EXT_BODY="$(gh release view \
-            --repo "$EXT_REPO" \
-            --json body \
-            --jq '.body')"
-
-          API_TAG="$(gh release view \
-            --repo "$GITHUB_REPOSITORY" \
-            --json tagName \
-            --jq '.tagName')"
-
-          CURRENT_BODY="$(gh release view \
-            "$API_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --json body \
-            --jq '.body')"
-
-          {
-            printf '%s\n\n' "$CURRENT_BODY"
-            printf '%s\n\n' '---'
-            printf '## kenjitsu-extensions %s\n\n' "$EXT_TAG"
-            printf 'https://github.com/middlegear/kenjitsu-extensions/releases/tag/%s\n\n' "$EXT_TAG"
-            printf '%s\n' "$EXT_BODY"
-          } > release-notes.md
-
-          gh release edit \
-            "$API_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --notes-file release-notes.md
