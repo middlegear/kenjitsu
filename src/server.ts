@@ -22,6 +22,7 @@ import AnimeHeavenRoutes from './routes/anime/animeheaven.js';
 import AniBDRoutes from './routes/anime/anibd.js';
 import KitsuRoutes from './routes/meta/kitsu.js';
 import MyAnimeListRoutes from './routes/meta/mal.js';
+import NyaaRoutes from './routes/torrent/nyaa.js';
 
 events.defaultMaxListeners = 25;
 
@@ -90,8 +91,9 @@ async function FastifyApp() {
   await app.register(fastifyCors, corsOptions);
 
   await app.register(AnilistRoutes, { prefix: '/api/anilist' });
-  await app.register(MyAnimeListRoutes, { prefix: '/api/mal' });
+  // await app.register(MyAnimeListRoutes, { prefix: '/api/mal' }); //disabled temporarily
   await app.register(KitsuRoutes, { prefix: '/api/kitsu' });
+  await app.register(NyaaRoutes, { prefix: '/api/nyaa' });
   await app.register(AnikotoRoutes, { prefix: '/api/anikoto' });
   await app.register(AniDBRoutes, { prefix: '/api/anidb' });
   await app.register(AniBDRoutes, { prefix: '/api/anibd' });
