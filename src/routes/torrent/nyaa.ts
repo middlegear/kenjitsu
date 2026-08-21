@@ -3,6 +3,7 @@ import { Nyaa } from '@middlegear/kenjitsu-extensions';
 import { type FastifyParams, type FastifyQuery } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
+
 const baseUrl = process.env.NYAAURL || 'https://nyaa.si';
 const nyaa = new Nyaa(baseUrl);
 
@@ -48,13 +49,13 @@ export default async function NyaaRoutes(fastify: FastifyInstance) {
 
       const id = request.params.id;
       if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
-
+      const episodeNumber = request.params.episode;
       const cacheKey = `nyaa-infohash-${id}`;
       const cachedData = await redisGetCache(cacheKey);
       if (cachedData) return reply.status(200).send(cachedData);
 
       try {
-        const result = await nyaa.fetchInfoHashDetails(id);
+        const result = await nyaa.fetchInfoHashDetails(id)
         if (!result || typeof result !== 'object') {
           return reply.status(502).send({ error: 'Invalid response' });
         }

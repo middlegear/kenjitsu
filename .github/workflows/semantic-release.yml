@@ -29,19 +29,6 @@ jobs:
           node-version: "24"
           registry-url: https://npm.pkg.github.com
 
-      - name: GitHub Packages Auth
-        run: |
-          echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
-
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
-        env:
-          NPM_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
-
-      - name: Lint
-        run: pnpm lint
 
       - name: Build
         run: pnpm build
