@@ -1,30 +1,15 @@
 
 # Kenjitsu
 
-A lightweight, high-performance Node.js API built with **Fastify** for delivering detailed metadata and streaming sources for anime, movies, and TV shows.
-
-## Features
-
-* **Fast and efficient** — built on Fastify for optimal performance
-* **Comprehensive endpoints** — for anime, movies, and TV series
-* **JSON-based responses** — ready for integration with web and mobile apps
-* **Stable and nightly updates** — choose the version that fits your needs
+A lightweight  Node.js API built with **Fastify** for delivering detailed metadata and  sources for anime.
 
 ## Getting Started
 
 ### Docker
 
-#### Stable
-
 ```bash
 docker pull ghcr.io/middlegear/kenjitsu:latest
 ````
-
-#### Nightly
-
-```bash
-docker pull ghcr.io/middlegear/kenjitsu:nightly
-```
 
 ## Documentation
 

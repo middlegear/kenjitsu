@@ -91,7 +91,7 @@ async function FastifyApp() {
   await app.register(fastifyCors, corsOptions);
 
   await app.register(AnilistRoutes, { prefix: '/api/anilist' });
-  // await app.register(MyAnimeListRoutes, { prefix: '/api/mal' }); //disabled temporarily
+  await app.register(MyAnimeListRoutes, { prefix: '/api/mal' });
   await app.register(KitsuRoutes, { prefix: '/api/kitsu' });
   await app.register(NyaaRoutes, { prefix: '/api/nyaa' });
   await app.register(AnikotoRoutes, { prefix: '/api/anikoto' });
