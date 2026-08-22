@@ -6,7 +6,7 @@ export interface FastifyParams {
   genre?: string;
   country?: string;
   season?: string;
-  episode?: number;
+  episode?: string;
   year?: string;
   status?: string;
   category?: string;
@@ -40,4 +40,4 @@ export const IAnimeCategoryArr = ['TV', 'MOVIE', 'SPECIALS', 'OVA', 'ONA'] as co
 export const IAnimeSeasonsArr = ['WINTER', 'SPRING', 'SUMMER', 'FALL'] as const;
 
 
-export const allowedAnimeProviders = ['anikoto', , 'anizone', , 'anidb', 'anibd', 'animeheaven', 'kitsu'];
+export const allowedAnimeProviders = ['anikoto', 'anizone', 'anidb', 'anibd', 'animeheaven', 'kitsu'];

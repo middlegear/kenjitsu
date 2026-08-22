@@ -111,7 +111,7 @@ export default async function AnimeHeavenRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
         if (result.data && Array.isArray(result.data.sources) && result.data.sources.length > 0) {
-          redisSetCache(cacheKey, result, 2);
+          await redisSetCache(cacheKey, result, 2);
         }
         return reply.status(200).send(result);
       } catch (error) {
