@@ -361,8 +361,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     },
   );
   fastify.get(
-    '/anime/mappings/:id',
-
+    '/anime/:id/mappings',
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
