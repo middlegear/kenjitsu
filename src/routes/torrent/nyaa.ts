@@ -49,7 +49,6 @@ export default async function NyaaRoutes(fastify: FastifyInstance) {
 
       const id = request.params.id;
       if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
-      const episodeNumber = request.params.episode;
       const cacheKey = `nyaa-infohash-${id}`;
       const cachedData = await redisGetCache(cacheKey);
       if (cachedData) return reply.status(200).send(cachedData);

@@ -6,7 +6,7 @@ export interface FastifyParams {
   genre?: string;
   country?: string;
   season?: string;
-  episode?: number;
+  episode?: string;
   year?: string;
   status?: string;
   category?: string;

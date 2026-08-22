@@ -13,7 +13,7 @@ export default async function AniBDRoutes(fastify: FastifyInstance) {
     const { q } = request.query;
     if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
     if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
-    const cacheKey = `anibd -search-${q}`;
+    const cacheKey = `anibd-search-${q}`;
     const cachedData = await redisGetCache(cacheKey);
     if (cachedData) return reply.status(200).send(cachedData);
     try {
@@ -133,7 +133,7 @@ export default async function AniBDRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
         if (result.data && Array.isArray(result.data.sources) && result.data.sources.length > 0) {
-          redisSetCache(cacheKey, result, 12);
+          await redisSetCache(cacheKey, result, 12);
         }
         return reply.status(200).send(result);
       } catch (error) {
