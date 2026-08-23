@@ -43,7 +43,7 @@ export default async function KitsuRoutes(fastify: FastifyInstance) {
     '/anime/:id',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${72 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
       if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
@@ -62,7 +62,7 @@ export default async function KitsuRoutes(fastify: FastifyInstance) {
         }
 
         if (result.data) {
-          await redisSetCache(cacheKey, result, 2);
+          await redisSetCache(cacheKey, result, 72);
         }
         return reply.status(200).send(result);
       } catch (error) {
@@ -94,7 +94,7 @@ export default async function KitsuRoutes(fastify: FastifyInstance) {
         }
 
         if (result?.data?.length > 0) {
-          await redisSetCache(cacheKey, result, 2);
+          await redisSetCache(cacheKey, result, 6);
         }
         return reply.status(200).send(result);
       } catch (error) {
@@ -126,8 +126,8 @@ export default async function KitsuRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
 
-        if (result?.data) {
-          await redisSetCache(cacheKey, result, 24);
+        if (result?.data?.id) {
+          await redisSetCache(cacheKey, result, 168);
         }
         return reply.status(200).send(result);
       } catch (error) {

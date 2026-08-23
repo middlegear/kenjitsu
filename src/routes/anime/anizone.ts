@@ -71,14 +71,14 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
     '/anime/:id',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
       const id = request.params.id;
       if (!id) {
         return reply.status(400).send({
           error: `Missing required path paramater: 'id'`,
         });
       }
-      let duration;
+
       const cacheKey = `anizone-info-${id}`;
       const cachedData = await redisGetCache(cacheKey);
       if (cachedData) {
@@ -101,10 +101,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
           Array.isArray(result.providerEpisodes) &&
           result.providerEpisodes.length > 0
         ) {
-          result.data.status.toLowerCase() === 'completed' && result.providerEpisodes.length === result.data.totalEpisodes
-            ? (duration = 0)
-            : (duration = 1);
-          await redisSetCache(cacheKey, result, duration);
+          await redisSetCache(cacheKey, result, 24);
         }
         return reply.status(200).send(result);
       } catch (error) {
@@ -117,7 +114,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
     '/sources/:episodeId',
 
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${48 * 60 * 60}, stale-while-revalidate=300`);
       const episodeId = request.params.episodeId;
       if (!episodeId) {
         return reply.status(400).send({
@@ -140,7 +137,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
         if (result.data && Array.isArray(result.data.sources) && result.data.sources.length > 0) {
-          await redisSetCache(cacheKey, result, 12);
+          await redisSetCache(cacheKey, result, 48);
         }
         return reply.status(200).send(result);
       } catch (error) {

@@ -9,7 +9,7 @@ const anidb = new AniDB(baseUrl);
 
 export default async function AniDBRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${72 * 60 * 60}, stale-while-revalidate=300`);
 
     const { q } = request.query;
     if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
@@ -31,7 +31,7 @@ export default async function AniDBRoutes(fastify: FastifyInstance) {
       }
 
       if (result && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 24);
+        await redisSetCache(cacheKey, result, 72);
       }
 
       return reply.status(200).send(result);
@@ -41,7 +41,7 @@ export default async function AniDBRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/anime/:id', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${48 * 60 * 60}, stale-while-revalidate=300`);
 
     const id = request.params.id;
 
@@ -70,7 +70,7 @@ export default async function AniDBRoutes(fastify: FastifyInstance) {
       }
 
       if (result && result.data !== null) {
-        await redisSetCache(cacheKey, result, 24);
+        await redisSetCache(cacheKey, result, 48);
       }
       return reply.status(200).send(result);
     } catch (error) {
@@ -79,7 +79,7 @@ export default async function AniDBRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/anime/:id/episodes', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
 
     const id = request.params.id;
 
@@ -108,7 +108,7 @@ export default async function AniDBRoutes(fastify: FastifyInstance) {
         return reply.status(result.status as number).send({ error: result.error });
       }
       if (result && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 5);
+        await redisSetCache(cacheKey, result, 6);
       }
       return reply.status(200).send(result);
     } catch (error) {
@@ -119,7 +119,7 @@ export default async function AniDBRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/episode/:episodeId/servers',
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${48 * 60 * 60}, stale-while-revalidate=300`);
 
       const episodeId = request.params.episodeId;
 
@@ -142,7 +142,7 @@ export default async function AniDBRoutes(fastify: FastifyInstance) {
         }
 
         if (result && typeof result === 'object' && result.data?.episodeNumber !== 0) {
-          await redisSetCache(cacheKey, result, 6);
+          await redisSetCache(cacheKey, result, 48);
         }
         return reply.status(200).send(result);
       } catch (error) {

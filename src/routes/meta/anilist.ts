@@ -50,7 +50,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     '/anime/:id',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${72 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
       if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
@@ -68,9 +68,8 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
 
-        const duration = result.data?.status?.toLowerCase() === 'finished' ? 12 : 1;
         if (result.data) {
-          await redisSetCache(cacheKey, result, duration);
+          await redisSetCache(cacheKey, result, 72);
         }
         return reply.status(200).send(result);
       } catch (error) {
@@ -199,7 +198,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     },
   );
   fastify.get('/anime/:id/episodes', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
 
     const id = request.params.id;
     if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
@@ -218,7 +217,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       }
 
       if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 2);
+        await redisSetCache(cacheKey, result, 6);
       }
       return reply.status(200).send(result);
     } catch (error) {
@@ -415,17 +414,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         }
 
         const data = result?.data;
-        const status = data?.status?.toLowerCase();
-        const format = data?.format?.toLowerCase();
-
-        if (
-          result &&
-          data &&
-          result.provider !== null &&
-          status === 'finished' &&
-          data.episodes !== null &&
-          format !== 'movie'
-        ) {
+        if (result && data && result.provider !== null) {
           await redisSetCache(cacheKey, result, 168);
         }
         return reply.status(200).send(result);

@@ -9,7 +9,7 @@ const anibd = new AniBD(baseUrl);
 
 export default async function AniBDRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
     const { q } = request.query;
     if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
     if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
@@ -27,7 +27,7 @@ export default async function AniBDRoutes(fastify: FastifyInstance) {
         return reply.status(result.status as number).send({ error: result.error });
       }
       if (result && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 12);
+        await redisSetCache(cacheKey, result, 168);
       }
       return reply.status(200).send(result);
     } catch (error) {
@@ -36,7 +36,7 @@ export default async function AniBDRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/anime/:id', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
     const id = request.params.id;
     if (!id) {
       return reply.status(400).send({
@@ -66,7 +66,7 @@ export default async function AniBDRoutes(fastify: FastifyInstance) {
         Array.isArray(result.providerEpisodes) &&
         result.providerEpisodes.length > 0
       ) {
-        await redisSetCache(cacheKey, result, 6);
+        await redisSetCache(cacheKey, result, 24);
       }
       return reply.status(200).send(result);
     } catch (error) {
@@ -75,7 +75,7 @@ export default async function AniBDRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/anime/:id/episodes', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
+    reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
     const id = request.params.id;
     if (!id) {
       return reply.status(400).send({
@@ -99,7 +99,7 @@ export default async function AniBDRoutes(fastify: FastifyInstance) {
         return reply.status(result.status as number).send({ error: result.error });
       }
       if (result && result.data && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 4);
+        await redisSetCache(cacheKey, result, 6);
       }
       return reply.status(200).send(result);
     } catch (error) {
