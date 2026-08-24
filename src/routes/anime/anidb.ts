@@ -119,7 +119,7 @@ export default async function AniDBRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/episode/:episodeId/servers',
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${48 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${0.5 * 60 * 60}, stale-while-revalidate=300`);
 
       const episodeId = request.params.episodeId;
 
@@ -142,7 +142,7 @@ export default async function AniDBRoutes(fastify: FastifyInstance) {
         }
 
         if (result && typeof result === 'object' && result.data?.episodeNumber !== 0) {
-          await redisSetCache(cacheKey, result, 48);
+          await redisSetCache(cacheKey, result, 0.5);
         }
         return reply.status(200).send(result);
       } catch (error) {
