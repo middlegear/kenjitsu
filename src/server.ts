@@ -42,7 +42,7 @@ const app: FastifyInstance = Fastify({
         remotePort: req.socket.remotePort,
         headers: {
           'user-agent': req.headers['user-agent'],
-          'x-api-key': req.headers['x-api-key'] ? '[present]' : '[missing]',
+          'x-api-key': req.headers['x-api-key'] ? req.headers['x-api-key'] : 'Missing',
           host: req.headers['host'],
           referer: req.headers['referer'],
           origin: req.headers['origin'],
