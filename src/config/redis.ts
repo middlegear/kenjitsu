@@ -1,189 +1,111 @@
 import 'dotenv/config';
 import { Redis } from 'ioredis';
 
-const port = Number(process.env.REDIS_PORT || 6379);
+const port = Number(process.env.REDIS_PORT);
 const host = process.env.REDIS_HOST;
 const password = process.env.REDIS_PASSWORD;
 
-const redisEnabled = Boolean(host && password);
+const isRedisEnabled = Boolean(host && password);
 
 let redisInstance: Redis | null = null;
-let redisConnecting: Promise<Redis | null> | null = null;
 
-function createRedis(): Redis | null {
-  if (!redisEnabled) {
-    return null;
-  }
-
-  const redis = new Redis({
-    host,
-    port,
-    password,
-    tls: {},
-    lazyConnect: true,
-    enableOfflineQueue: false,
-    maxRetriesPerRequest: 1,
-    connectTimeout: 3000,
-    retryStrategy: null,
-    reconnectOnError: () => false,
-    enableReadyCheck: true,
-  });
-
-  redis.on('ready', () => {
-    console.log('🟢 Redis ready');
-  });
-
-  redis.on('connect', () => {
-    console.log('🟢 Redis connected');
-  });
-
-  redis.on('error', err => {
-    console.error('🔴 Redis error:', err.message);
-  });
-
-  redis.on('close', () => {
-    console.log('🟡 Redis connection closed');
-  });
-
-  redis.on('end', () => {
-    console.log('🟡 Redis connection ended');
-  });
-
-  return redis;
-}
-
-async function getRedis(): Promise<Redis | null> {
-  if (!redisEnabled) {
-    return null;
-  }
-
+function initRedis() {
+  if (!isRedisEnabled) return null;
   if (!redisInstance) {
-    redisInstance = createRedis();
+    redisInstance = new Redis({
+      host,
+      port,
+      password,
+      tls: {},
+      lazyConnect: true,
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+    });
+
+    redisInstance.on('connect', () => console.log('🟢 Redis connected'));
+    redisInstance.on('error', err => console.error('🔴 Redis error:', err.message));
+    redisInstance.on('end', () => console.log('🟡 Redis connection closed'));
   }
-
-  if (!redisInstance) {
-    return null;
-  }
-
-  if (redisInstance.status === 'ready') {
-    return redisInstance;
-  }
-
-  if (redisInstance.status === 'connecting') {
-    return redisInstance;
-  }
-
-  if (redisInstance.status === 'end' || redisInstance.status === 'wait') {
-    if (!redisConnecting) {
-      redisConnecting = redisInstance
-        .connect()
-        .then(() => redisInstance)
-        .catch(error => {
-          console.error('❌ Redis unavailable, continuing without cache:', error instanceof Error ? error.message : error);
-
-          return null;
-        })
-        .finally(() => {
-          redisConnecting = null;
-        });
-    }
-
-    return redisConnecting;
-  }
-
   return redisInstance;
 }
 
-export async function checkRedis(): Promise<boolean> {
-  const redis = await getRedis();
+const redis = initRedis();
 
+export async function checkRedis() {
   if (!redis) {
-    return false;
+    console.warn('❌ Redis is disabled (missing environment variables).');
+    return;
   }
 
   try {
-    await redis.ping();
-    return true;
-  } catch (error) {
-    console.error('❌ Redis health check failed:', error instanceof Error ? error.message : error);
-
-    return false;
+    if (!redis.status || redis.status === 'end') {
+      await redis.connect();
+    }
+  } catch (err) {
+    console.error('❌ Redis Connection Failed:', err);
   }
 }
 
 const DEFAULT_CACHE_EXPIRY_HOURS = 1;
 
 /**
- * Sets a value in Redis safely.
- *
- * Redis is only an optional cache. A Redis failure must never fail
- * the actual API request.
+ * Sets a value in the cache (Redis) for permanent storage.
+ * @param key your key to set cache
+ * @param value  the data you want cached
+ * @param ttlInHours =DEFAULT_CACHE_EXPIRY_HOURS] Set cache expiry in hours. Use value zero for permanent storage or set a value( default = 1(hour))
  */
 async function redisSetCache<T>(key: string, value: T, ttlInHours: number = DEFAULT_CACHE_EXPIRY_HOURS): Promise<void> {
-  const redis = await getRedis();
+  const stringValue = JSON.stringify(value);
 
-  if (!redis) {
-    return;
-  }
-
-  try {
-    const stringValue = JSON.stringify(value);
-
+  if (redis) {
+    // If ttlInHours is set to 0 or you want to set it as permanent
     if (ttlInHours === 0) {
       await redis.set(key, stringValue);
+      console.log(`Data stored permanently in Redis (Key: ${key})`);
     } else {
-      await redis.set(key, stringValue, 'EX', Math.max(1, Math.floor(ttlInHours * 3600)));
+      await redis.set(key, stringValue, 'EX', ttlInHours * 3600);
+      console.log(`Data stored in Redis with TTL (Key: ${key}, TTL: ${ttlInHours} hours)`);
     }
-  } catch (error) {
-    console.error('⚠️ Redis cache set failed:', error instanceof Error ? error.message : error);
-  }
-}
-
-async function redisGetCache<T>(key: string): Promise<T | null> {
-  const redis = await getRedis();
-
-  if (!redis) {
-    return null;
-  }
-
-  try {
-    const data = await redis.get(key);
-
-    if (!data) {
-      console.log(`Cache miss - Key: ${key}`);
-      return null;
-    }
-
-    const value = JSON.parse(data) as T;
-
-    console.log(`Cache hit (Redis) - Key: ${key}`);
-
-    return value;
-  } catch (error) {
-    console.error('⚠️ Redis cache get failed:', error instanceof Error ? error.message : error);
-
-    return null;
   }
 }
 
 /**
- * Purges a specific key or the entire cache safely.
+ *  * @param key your key to retrieve data
+ * Retrieves a value from the cache (Redis).
+ */
+async function redisGetCache<T>(key: string): Promise<T | null> {
+  if (redis) {
+    const data = await redis.get(key);
+    if (data) {
+      try {
+        const value = JSON.parse(data) as T;
+        console.log(`Cache hit (Redis) - Key: ${key}`);
+
+        return value;
+      } catch (error) {
+        console.error('Error parsing JSON from Redis:', error);
+        return null;
+      }
+    }
+  }
+  if (redis) {
+    console.log(`Cache miss - Key: ${key}`);
+  }
+  return null;
+}
+
+/**
+ * Purges a specific key or the entire cache (Redis and/or in-memory).
  */
 async function purgeCache(key?: string): Promise<void> {
-  const redis = await getRedis();
-
-  if (!redis) {
-    return;
-  }
-
-  try {
+  if (redis) {
     if (key) {
       await redis.del(key);
+      console.log(`Redis cache cleared for key: ${key}`);
     } else {
       await redis.flushall();
+      console.log('Entire Redis cache has been purged');
     }
-  } catch (error) {
-    console.error('⚠️ Redis cache purge failed:', error instanceof Error ? error.message : error);
   }
 }
 
