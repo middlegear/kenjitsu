@@ -10,20 +10,17 @@ import events from 'node:events';
 
 import StaticRoutes from './routes/static.js';
 import AnizoneRoutes from './routes/anime/anizone.js';
-import AnilistRoutes from './routes/meta/anilist.js';
-import TheMovieDatabaseRoutes from './routes/meta/tmdb.js';
-import { ratelimitOptions, rateLimitPlugIn } from './config/ratelimit.js';
-import fastifyCors, { corsOptions } from './config/cors.js';
-import { checkRedis, purgeCache } from './config/redis.js';
-
 import AnikotoRoutes from './routes/anime/anikoto.js';
 import AniDBRoutes from './routes/anime/anidb.js';
-import AnimeHeavenRoutes from './routes/anime/animeheaven.js';
 import AniBDRoutes from './routes/anime/anibd.js';
+import AnimeHeavenRoutes from './routes/anime/animeheaven.js';
+import AnilistRoutes from './routes/meta/anilist.js';
 import KitsuRoutes from './routes/meta/kitsu.js';
 import MyAnimeListRoutes from './routes/meta/mal.js';
+import TheMovieDatabaseRoutes from './routes/meta/tmdb.js';
 import NyaaRoutes from './routes/torrent/nyaa.js';
-
+import { ratelimitOptions, rateLimitPlugIn } from './config/ratelimit.js';
+import fastifyCors, { corsOptions } from './config/cors.js';
 events.defaultMaxListeners = 25;
 
 const API_KEY = process.env.API_KEY;
@@ -67,7 +64,12 @@ const app: FastifyInstance = Fastify({
   },
 } as FastifyServerOptions<RawServerDefault>);
 
-async function FastifyApp() {
+let appInitialized = false;
+
+async function initializeApp() {
+  if (appInitialized) {
+    return;
+  }
   app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.url.startsWith('/api')) {
       return;
@@ -78,18 +80,18 @@ async function FastifyApp() {
     }
 
     const apiKeyHeader = request.headers['x-api-key'];
+
     const apiKey = Array.isArray(apiKeyHeader) ? apiKeyHeader[0] : apiKeyHeader;
 
     if (!apiKey || apiKey !== API_KEY) {
-      return reply.code(401).send({ error: 'Unauthorized' });
+      return reply.code(401).send({
+        error: 'Unauthorized',
+      });
     }
   });
 
   await app.register(rateLimitPlugIn, ratelimitOptions);
-
-  await checkRedis();
   await app.register(fastifyCors, corsOptions);
-
   await app.register(AnilistRoutes, { prefix: '/api/anilist' });
   await app.register(MyAnimeListRoutes, { prefix: '/api/mal' });
   await app.register(KitsuRoutes, { prefix: '/api/kitsu' });
@@ -101,31 +103,38 @@ async function FastifyApp() {
   await app.register(AnimeHeavenRoutes, { prefix: '/api/animeheaven' });
   await app.register(TheMovieDatabaseRoutes, { prefix: '/api/tmdb' });
   await app.register(StaticRoutes);
+
+  appInitialized = true;
+}
+
+async function FastifyApp() {
   try {
+    await initializeApp();
     const port = parseInt(process.env.PORT || '3000', 10);
     const host = process.env.HOST || '0.0.0.0';
-
     if (isNaN(port)) {
       console.error('Invalid PORT environment variable');
       process.exit(1);
     }
-
-    await app.listen({ host, port });
+    await app.listen({
+      host,
+      port,
+    });
+    console.log(`🚀 Server listening on ${host}:${port}`);
   } catch (err) {
-    console.error(`Server startup error:`, err);
+    console.error('Server startup error:', err);
+
     process.exit(1);
   }
 }
 
-FastifyApp();
-
-let isReady = false;
+const isServerless = process.env.SERVERLESSPLATFORM === 'TRUE';
+if (!isServerless) {
+  FastifyApp();
+}
 
 export default async function handler(request: FastifyRequest, reply: FastifyReply) {
-  if (!isReady) {
-    await app.ready();
-    isReady = true;
-  }
+  await initializeApp();
+  await app.ready();
   app.server.emit('request', request, reply);
 }
-// purgeCache();

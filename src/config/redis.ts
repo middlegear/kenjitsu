@@ -1,108 +1,180 @@
 import 'dotenv/config';
 import { Redis } from 'ioredis';
 
-const port = Number(process.env.REDIS_PORT);
+const port = Number(process.env.REDIS_PORT || 6379);
 const host = process.env.REDIS_HOST;
 const password = process.env.REDIS_PASSWORD;
 
-let isRedisAvailable = Boolean(host && password);
+const redisEnabled = Boolean(host && password);
 
 let redisInstance: Redis | null = null;
+let redisConnecting: Promise<Redis | null> | null = null;
 
-function initRedis() {
-  if (!isRedisAvailable) return null;
-  if (!redisInstance) {
-    redisInstance = new Redis({
-      host,
-      port,
-      password,
-      tls: {},
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-      connectTimeout: 3000,
-      enableReadyCheck: true,
-    });
-
-    redisInstance.on('connect', () => {
-      isRedisAvailable = true;
-      console.log('🟢 Redis connected');
-    });
-
-    redisInstance.on('error', err => {
-      console.error('🔴 Redis error (disabling cache temporarily):', err.message);
-      isRedisAvailable = false;
-    });
-
-    redisInstance.on('end', () => {
-      isRedisAvailable = false;
-      console.log('🟡 Redis connection closed');
-    });
+function createRedis(): Redis | null {
+  if (!redisEnabled) {
+    return null;
   }
+
+  const redis = new Redis({
+    host,
+    port,
+    password,
+    tls: {},
+    lazyConnect: true,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 1,
+    connectTimeout: 3000,
+    retryStrategy: null,
+    reconnectOnError: () => false,
+    enableReadyCheck: true,
+  });
+
+  redis.on('ready', () => {
+    console.log('🟢 Redis ready');
+  });
+
+  redis.on('connect', () => {
+    console.log('🟢 Redis connected');
+  });
+
+  redis.on('error', err => {
+    console.error('🔴 Redis error:', err.message);
+  });
+
+  redis.on('close', () => {
+    console.log('🟡 Redis connection closed');
+  });
+
+  redis.on('end', () => {
+    console.log('🟡 Redis connection ended');
+  });
+
+  return redis;
+}
+
+async function getRedis(): Promise<Redis | null> {
+  if (!redisEnabled) {
+    return null;
+  }
+
+  if (!redisInstance) {
+    redisInstance = createRedis();
+  }
+
+  if (!redisInstance) {
+    return null;
+  }
+
+  if (redisInstance.status === 'ready') {
+    return redisInstance;
+  }
+
+  if (redisInstance.status === 'connecting') {
+    return redisInstance;
+  }
+
+  if (redisInstance.status === 'end' || redisInstance.status === 'wait') {
+    if (!redisConnecting) {
+      redisConnecting = redisInstance
+        .connect()
+        .then(() => redisInstance)
+        .catch(error => {
+          console.error('❌ Redis unavailable, continuing without cache:', error instanceof Error ? error.message : error);
+
+          return null;
+        })
+        .finally(() => {
+          redisConnecting = null;
+        });
+    }
+
+    return redisConnecting;
+  }
+
   return redisInstance;
 }
 
-const redis = initRedis();
+export async function checkRedis(): Promise<boolean> {
+  const redis = await getRedis();
 
-export async function checkRedis() {
-  if (!isRedisAvailable || !redis) {
-    console.warn('❌ Redis is disabled or unavailable.');
-    return;
+  if (!redis) {
+    return false;
   }
 
   try {
-    if (redis.status === 'end' || redis.status === 'wait') {
-      await redis.connect();
-    }
-  } catch (err) {
-    isRedisAvailable = false;
-    console.error('❌ Redis Connection Failed, running without cache.');
+    await redis.ping();
+    return true;
+  } catch (error) {
+    console.error('❌ Redis health check failed:', error instanceof Error ? error.message : error);
+
+    return false;
   }
 }
 
 const DEFAULT_CACHE_EXPIRY_HOURS = 1;
 
 /**
- * Sets a value in the cache (Redis) safely without crashing if down.
+ * Sets a value in Redis safely.
+ *
+ * Redis is only an optional cache. A Redis failure must never fail
+ * the actual API request.
  */
 async function redisSetCache<T>(key: string, value: T, ttlInHours: number = DEFAULT_CACHE_EXPIRY_HOURS): Promise<void> {
-  if (!isRedisAvailable || !redis) return;
+  const redis = await getRedis();
+
+  if (!redis) {
+    return;
+  }
 
   try {
     const stringValue = JSON.stringify(value);
+
     if (ttlInHours === 0) {
       await redis.set(key, stringValue);
     } else {
-      await redis.set(key, stringValue, 'EX', ttlInHours * 3600);
+      await redis.set(key, stringValue, 'EX', Math.max(1, Math.floor(ttlInHours * 3600)));
     }
   } catch (error) {
-    isRedisAvailable = false;
-    console.error('Cache set failed, continuing without Redis:', error);
+    console.error('⚠️ Redis cache set failed:', error instanceof Error ? error.message : error);
   }
 }
 
 async function redisGetCache<T>(key: string): Promise<T | null> {
-  if (!isRedisAvailable || !redis) return null;
+  const redis = await getRedis();
+
+  if (!redis) {
+    return null;
+  }
 
   try {
     const data = await redis.get(key);
-    if (data) {
-      const value = JSON.parse(data) as T;
-      console.log(`Cache hit (Redis) - Key: ${key}`);
-      return value;
+
+    if (!data) {
+      console.log(`Cache miss - Key: ${key}`);
+      return null;
     }
-    console.log(`Cache miss - Key: ${key}`);
+
+    const value = JSON.parse(data) as T;
+
+    console.log(`Cache hit (Redis) - Key: ${key}`);
+
+    return value;
   } catch (error) {
-    isRedisAvailable = false;
-    console.error('Cache get failed, continuing without Redis:', error);
+    console.error('⚠️ Redis cache get failed:', error instanceof Error ? error.message : error);
+
+    return null;
   }
-  return null;
 }
 
 /**
  * Purges a specific key or the entire cache safely.
  */
 async function purgeCache(key?: string): Promise<void> {
-  if (!isRedisAvailable || !redis) return;
+  const redis = await getRedis();
+
+  if (!redis) {
+    return;
+  }
 
   try {
     if (key) {
@@ -111,7 +183,7 @@ async function purgeCache(key?: string): Promise<void> {
       await redis.flushall();
     }
   } catch (error) {
-    console.error('Cache purge failed:', error);
+    console.error('⚠️ Redis cache purge failed:', error instanceof Error ? error.message : error);
   }
 }
 
