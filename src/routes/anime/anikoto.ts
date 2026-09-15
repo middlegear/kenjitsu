@@ -449,7 +449,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       const episodeId = request.params.episodeId;
       const version = (request.query.version as 'sub' | 'dub' | 'raw') || 'sub';
-      const server = request.query.server as 'vidstream-2' | 'vidcloud-1' | 'vidplay-1' | 'hd-1' | 'hd-2';
+      const server = request.query.server as 'vidstream-2' | 'vidplay-1' | 'hd-1' | 'hd-2';
       if (!['sub', 'dub', 'raw'].includes(version)) {
         return reply.status(400).send({
           error: `Invalid version picked: '${version}'. Expected one of 'sub','dub' or 'raw'. `,
