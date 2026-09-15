@@ -13,7 +13,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
 
-      const { q, page = 1 ,year} = request.query;
+      const { q, page = 1, year } = request.query;
 
       if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
       if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
@@ -25,7 +25,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
       if (cachedData) return reply.status(200).send(cachedData);
 
       try {
-        const result = await tmdb.searchMovie(q, page,firstAirdateYear);
+        const result = await tmdb.searchMovie(q, page, firstAirdateYear);
         if (!result || typeof result !== 'object') {
           return reply.status(502).send({ error: 'External provider returned an invalid response(null)' });
         }
@@ -47,19 +47,19 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
 
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
       reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
-      const { q, page = 1 ,year} = request.query;
+      const { q, page = 1, year } = request.query;
 
       if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
       if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
-      
-      const firstAirdateYear = year? Number(year): undefined
-      
+
+      const firstAirdateYear = year ? Number(year) : undefined;
+
       const cacheKey = `tmdb-search-tv-${q}-${page}-${firstAirdateYear}`;
       const cachedData = await redisGetCache(cacheKey);
       if (cachedData) return reply.status(200).send(cachedData);
 
       try {
-        const result = await tmdb.searchShows(q, page,firstAirdateYear);
+        const result = await tmdb.searchShows(q, page, firstAirdateYear);
         if (!result || typeof result !== 'object') {
           return reply.status(502).send({ error: 'External provider returned an invalid response(null)' });
         }
@@ -306,8 +306,6 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
     '/tv/:id/seasons/:season',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
-
       const id = request.params.id;
       const season = request.params.season;
 
@@ -329,7 +327,11 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
         if (result && Array.isArray(result.data) && result.data.length > 0) {
           await redisSetCache(cacheKey, result, 24);
         }
-        return reply.status(200).send(result);
+
+        return reply
+          .status(200)
+          .header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`)
+          .send(result);
       } catch (error) {
         return reply.status(500).send({ error: `Internal server error occurred: ${error}` });
       }
