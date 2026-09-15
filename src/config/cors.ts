@@ -13,7 +13,7 @@ function resolveCorsOrigin(): true | string | string[] | undefined {
 
 export const corsOptions: FastifyCorsOptions = {
   origin: resolveCorsOrigin(),
-  credentials: true,
+  credentials: false,
   methods: ['GET'],
 };
 
