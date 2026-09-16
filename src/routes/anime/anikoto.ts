@@ -445,7 +445,6 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
 
   fastify.get(
     '/sources/:episodeId',
-
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
       const episodeId = request.params.episodeId;
       const version = (request.query.version as 'sub' | 'dub' | 'raw') || 'sub';
@@ -460,11 +459,11 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
           error: `Missing required path paramater: 'episodeId'`,
         });
       }
-      const cacheKey = `anikoto-sources-${episodeId}-${version}-${server}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) {
-        return reply.status(200).send(cachedData);
-      }
+      // const cacheKey = `anikoto-sources-${episodeId}-${version}-${server}`;
+      // const cachedData = await redisGetCache(cacheKey);
+      // if (cachedData) {
+      //   return reply.status(200).send(cachedData);
+      // }
       try {
         const result = await anikoto.fetchSources(episodeId, version, server);
         if (!result || typeof result !== 'object') {
@@ -475,9 +474,9 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
         if (result.error) {
           return reply.status(result.status as number).send({ error: result.error });
         }
-        if (result.data !== null && Array.isArray(result.data.sources) && result.data.sources.length > 0) {
-          await redisSetCache(cacheKey, result, 24);
-        }
+        // if (result.data !== null && Array.isArray(result.data.sources) && result.data.sources.length > 0) {
+        //   await redisSetCache(cacheKey, result, 24);
+        // }
         return reply.status(200).send(result);
       } catch (error) {
         return reply.status(500).send(error);
