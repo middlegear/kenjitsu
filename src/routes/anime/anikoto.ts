@@ -376,7 +376,7 @@ export default async function AnikotoRoutes(fastify: FastifyInstance) {
     '/anime/:id',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${2 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${0.1 * 60 * 60}, stale-while-revalidate=300`);
       const id = request.params.id;
       if (!id) {
         return reply.status(400).send({
