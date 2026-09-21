@@ -16,12 +16,9 @@ import { ratelimitOptions, rateLimitPlugIn } from './config/ratelimit.js';
 import fastifyCors, { corsOptions } from './config/cors.js';
 import { checkRedis, purgeCache } from './config/redis.js';
 import AnikotoRoutes from './routes/anime/anikoto.js';
-import AniDBRoutes from './routes/anime/anidb.js';
 import AnimeHeavenRoutes from './routes/anime/animeheaven.js';
 import AniBDRoutes from './routes/anime/anibd.js';
 import KitsuRoutes from './routes/meta/kitsu.js';
-import MyAnimeListRoutes from './routes/meta/mal.js';
-import NyaaRoutes from './routes/torrent/nyaa.js';
 
 events.defaultMaxListeners = 25;
 
@@ -90,11 +87,11 @@ async function FastifyApp() {
   await app.register(fastifyCors, corsOptions);
 
   await app.register(AnilistRoutes, { prefix: '/api/anilist' });
-  await app.register(MyAnimeListRoutes, { prefix: '/api/mal' });
+
   await app.register(KitsuRoutes, { prefix: '/api/kitsu' });
-  await app.register(NyaaRoutes, { prefix: '/api/nyaa' });
+
   await app.register(AnikotoRoutes, { prefix: '/api/anikoto' });
-  await app.register(AniDBRoutes, { prefix: '/api/anidb' });
+
   await app.register(AniBDRoutes, { prefix: '/api/anibd' });
   await app.register(AnizoneRoutes, { prefix: '/api/anizone' });
   await app.register(AnimeHeavenRoutes, { prefix: '/api/animeheaven' });
