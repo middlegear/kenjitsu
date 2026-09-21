@@ -365,7 +365,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
-      const provider = request.query.provider as 'anikoto' | 'anizone' | 'anidb' | 'anibd' | 'animeheaven' | 'kitsu';
+      const provider = request.query.provider as 'anikoto' | 'anizone' | 'anibd' | 'animeheaven' | 'kitsu';
 
       if (isNaN(id) || !id) {
         return reply.status(400).send({ error: "Missing or invalid 'id' parameter" });
@@ -392,9 +392,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
             result = await anilist.fetchAniBDProviderId(id);
             break;
 
-          case 'anidb':
-            result = await anilist.fetchAniDBProviderId(id);
-            break;
           case 'animeheaven':
             result = await anilist.fetchAnimeHeavenProviderId(id);
             break;

@@ -39,4 +39,4 @@ export const IAnimeCategoryArr = ['TV', 'MOVIE', 'SPECIALS', 'OVA', 'ONA'] as co
 
 export const IAnimeSeasonsArr = ['WINTER', 'SPRING', 'SUMMER', 'FALL'] as const;
 
-export const allowedAnimeProviders = ['anikoto', 'anizone', 'anidb', 'anibd', 'animeheaven', 'kitsu'];
+export const allowedAnimeProviders = ['anikoto', 'anizone', 'anibd', 'animeheaven', 'kitsu'];
