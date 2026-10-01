@@ -50,7 +50,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     '/anime/:id',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${72 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = Number(request.params.id);
       if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
@@ -67,9 +67,10 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         if (result.error) {
           return reply.status(result.status as number).send({ error: result.error });
         }
-
+        const isFinished = result.data?.status!.toUpperCase() === 'FINISHED';
+        const duration = isFinished ? 168 : 1;
         if (result.data) {
-          await redisSetCache(cacheKey, result, 72);
+          await redisSetCache(cacheKey, result, duration);
         }
         return reply.status(200).send(result);
       } catch (error) {
