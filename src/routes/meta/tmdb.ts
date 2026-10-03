@@ -203,7 +203,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
     '/tv/:id',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
 
       const id = request.params.id;
       if (!id) return reply.status(400).send({ error: 'Missing required path parameter: id' });
@@ -221,7 +221,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
         if (result && result.data !== null) {
-          await redisSetCache(cacheKey, result, 24);
+          await redisSetCache(cacheKey, result, 6);
         }
         return reply.status(200).send(result);
       } catch (error) {
@@ -325,12 +325,12 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
         if (result && Array.isArray(result.data) && result.data.length > 0) {
-          await redisSetCache(cacheKey, result, 24);
+          await redisSetCache(cacheKey, result, 1);
         }
 
         return reply
           .status(200)
-          .header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`)
+          .header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`)
           .send(result);
       } catch (error) {
         return reply.status(500).send({ error: `Internal server error occurred: ${error}` });

@@ -12,7 +12,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
     '/anime/search',
 
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`);
+      reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
       const { q } = request.query;
       if (!q) return reply.status(400).send({ error: "Missing required query param: 'q'" });
       if (q.length > 1000) return reply.status(400).send({ error: 'Query string too long' });
@@ -30,7 +30,7 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
         if (result && Array.isArray(result.data) && result.data.length > 0) {
-          await redisSetCache(cacheKey, result, 12);
+          await redisSetCache(cacheKey, result, 1);
         }
         return reply.status(200).send(result);
       } catch (error) {
