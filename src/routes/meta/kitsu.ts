@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Kitsu } from '@middlegear/kenjitsu-extensions';
-import { type FastifyParams, type FastifyQuery } from '../../utils/types.js';
+
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
+import { Kitsu } from '../../providers/meta/kitsu.js';
+import type { FastifyQuery, FastifyParams } from '../../types/base.js';
 
 const kitsu = new Kitsu();
 

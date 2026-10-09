@@ -1,8 +1,10 @@
 import 'dotenv/config';
-import { Anikoto, type IAnimeCategory, type IMetaFormat } from '@middlegear/kenjitsu-extensions';
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { type FastifyQuery, type FastifyParams, IAMetaFormatArr, IAnimeCategoryArr } from '../../utils/types.js';
+
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
+import { Anikoto } from '../../providers/main.js';
+import { IAnimeCategoryArr, type FastifyParams, type FastifyQuery, type IAnimeCategory } from '../../types/base.js';
 
 const baseUrl = process.env.ANIKOTOURL || 'https://anikototv.to';
 const anikoto = new Anikoto(baseUrl);

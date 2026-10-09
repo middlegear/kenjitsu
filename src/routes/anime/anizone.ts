@@ -1,8 +1,8 @@
 import 'dotenv/config';
-import { Anizone } from '@middlegear/kenjitsu-extensions';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
+import { Anizone } from '../../providers/anime/anizone.js';
+import type { FastifyQuery, FastifyParams } from '../../types/base.js';
 
 const baseUrl = process.env.ANIZONEURL || 'https://anizone.to';
 const anizone = new Anizone(baseUrl);
@@ -21,34 +21,6 @@ export default async function AnizoneRoutes(fastify: FastifyInstance) {
       if (cachedData) return reply.status(200).send(cachedData);
       try {
         const result = await anizone.search(q);
-        if (!result || typeof result !== 'object') {
-          return reply.status(502).send({
-            error: 'External provider returned an invalid response(null)',
-          });
-        }
-        if (result.error) {
-          return reply.status(result.status as number).send({ error: result.error });
-        }
-        if (result && Array.isArray(result.data) && result.data.length > 0) {
-          await redisSetCache(cacheKey, result, 1);
-        }
-        return reply.status(200).send(result);
-      } catch (error) {
-        return reply.status(500).send(error);
-      }
-    },
-  );
-
-  fastify.get(
-    '/anime/recent',
-
-    async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
-      const cacheKey = `anizone-updates`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
-      try {
-        const result = await anizone.fetchUpdates();
         if (!result || typeof result !== 'object') {
           return reply.status(502).send({
             error: 'External provider returned an invalid response(null)',

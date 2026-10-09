@@ -8,7 +8,10 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "lint": "tsc"
+    "dev:ext": "pnpm lint && tsx src/providers/main.ts",
+    "test": "vitest  --config vitest.config.ts",
+    "lint": "tsc",
+    "format": "prettier --write ."
   },
   "repository": {
     "type": "git",
@@ -42,23 +45,27 @@
   },
   "homepage": "https://github.com/middlegear/kenjitsu#readme",
   "devDependencies": {
-    "@semantic-release/github": "^12.0.9",
-    "@semantic-release/npm": "^13.1.5",
-    "tsup": "^8.5.1",
-    "@types/node": "^24.13.3",
-    "prettier": "^3.9.6",
+    "@semantic-release/github": "^12.0.10",
+    "@semantic-release/npm": "^13.2.0",
+    "@types/node": "^24.19.1",
+    "prettier": "^3.9.9",
     "semantic-release": "^25.0.9",
-    "tsx": "^4.23.13",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@fastify/cors": "^11.3.0",
+    "@fastify/cors": "^11.3.1",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "10.1.2",
-    "@middlegear/kenjitsu-extensions": "github:middlegear/kenjitsu-extensions#main",
+    "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",
-    "fastify": "^5.12.3",
-    "ioredis": "^5.11.1"
+    "fastify": "^5.12.5",
+    "fuzzball": "^2.2.6",
+    "impit": "^0.14.5",
+    "ioredis": "^5.11.1",
+    "p-queue": "^9.3.3",
+    "tough-cookie": "^6.0.2"
   },
   "packageManager": "pnpm@10.17.1+sha512.17c560fca4867ae9473a3899ad84a88334914f379be46d455cbf92e5cf4b39d34985d452d2583baf19967fa76cb5c17bc9e245529d0b98745721aa7200ecaf7a"
 }

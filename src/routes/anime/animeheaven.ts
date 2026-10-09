@@ -1,8 +1,10 @@
 import 'dotenv/config';
-import { AnimeHeaven } from '@middlegear/kenjitsu-extensions';
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { FastifyQuery, FastifyParams } from '../../utils/types.js';
+
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
+import { AnimeHeaven } from '../../providers/anime/animeheaven.js';
+import type { FastifyParams, FastifyQuery } from '../../types/base.js';
 
 const baseUrl = process.env.ANIMEHEAVENURL || 'https://animeheaven.me';
 const animeheaven = new AnimeHeaven(baseUrl);

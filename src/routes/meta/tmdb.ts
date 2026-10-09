@@ -1,8 +1,9 @@
-import { TheMovieDatabase } from '@middlegear/kenjitsu-extensions';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { FastifyInstance } from 'fastify';
-import { type FastifyParams, type FastifyQuery } from '../../utils/types.js';
+
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
+import { TheMovieDatabase } from '../../providers/meta/tmdb.js';
+import type { FastifyQuery, FastifyParams } from '../../types/base.js';
 
 const tmdb = new TheMovieDatabase();
 

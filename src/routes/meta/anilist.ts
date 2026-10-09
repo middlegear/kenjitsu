@@ -1,13 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { Anilist, type Seasons, type IMetaFormat } from '@middlegear/kenjitsu-extensions';
-import {
-  allowedAnimeProviders,
-  IAMetaFormatArr,
-  IAnimeSeasonsArr,
-  type FastifyParams,
-  type FastifyQuery,
-} from '../../utils/types.js';
+
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
+import { Anilist } from '../../providers/meta/anilist.js';
+import { type FastifyQuery, type FastifyParams, IAMetaFormatArr, allowedAnimeProviders } from '../../types/base.js';
+import { Seasons, type IMetaFormat } from '../../types/meta/meta-anime.js';
 
 const anilist = new Anilist();
 
@@ -332,7 +328,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       if (!season || !year) {
         return reply.status(400).send({ error: 'Missing season or year' });
       }
-      if (!IAnimeSeasonsArr.includes(season)) {
+      if (!Seasons.includes(season)) {
         return reply.status(400).send({ error: `Invalid season: ${season}` });
       }
 
