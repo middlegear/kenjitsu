@@ -17,7 +17,6 @@ import fastifyCors, { corsOptions } from './config/cors.js';
 import { checkRedis, purgeCache } from './config/redis.js';
 import AnikotoRoutes from './routes/anime/anikoto.js';
 import AnimeHeavenRoutes from './routes/anime/animeheaven.js';
-import AniBDRoutes from './routes/anime/anibd.js';
 import KitsuRoutes from './routes/meta/kitsu.js';
 
 events.defaultMaxListeners = 25;
@@ -92,7 +91,6 @@ async function FastifyApp() {
 
   await app.register(AnikotoRoutes, { prefix: '/api/anikoto' });
 
-  await app.register(AniBDRoutes, { prefix: '/api/anibd' });
   await app.register(AnizoneRoutes, { prefix: '/api/anizone' });
   await app.register(AnimeHeavenRoutes, { prefix: '/api/animeheaven' });
   await app.register(TheMovieDatabaseRoutes, { prefix: '/api/tmdb' });
