@@ -1,7 +1,6 @@
-
 # Kenjitsu
 
-A lightweight  Node.js API built with **Fastify** for delivering detailed metadata and  sources for anime.
+A lightweight Node.js API built with **Fastify** for delivering detailed metadata and sources for anime.
 
 ## Getting Started
 
@@ -9,7 +8,12 @@ A lightweight  Node.js API built with **Fastify** for delivering detailed metada
 
 ```bash
 docker pull ghcr.io/middlegear/kenjitsu:latest
-````
+```
+
+## Deployment
+
+* **Vercel:** Fork the [repository](https://github.com/middlegear/kenjitsu) and deploy it on [Vercel](https://vercel.com).
+* **Docker:** Use the prebuilt image `ghcr.io/middlegear/kenjitsu:latest`.
 
 ## Documentation
 
@@ -20,8 +24,7 @@ Complete API reference including endpoints, request parameters, and response sch
 ## Disclaimer
 
 > This project is for **educational purposes only**.
+>
 > Kenjitsu API is an **unofficial** service and is **not affiliated with any third-party providers**.
+>
 > The API does **not host, store, or distribute** any media content — all data belongs to its respective owners.
-
-
-
