@@ -547,7 +547,7 @@ class Cinemeta extends BaseClass {
       const narrowedEpisodes = this.resolveEpisodeRange(animeData, episodeList.data as ICinemetaEpisode[]).map(
         (ep, index) => ({
           ...ep,
-          absoluteEpisodeNumber: index + 1,
+          episodeNumber: index + 1,
           kitsuId: kitsuId.data?.kitsuId ? Number(kitsuId.data?.kitsuId) : null,
         }),
       );
