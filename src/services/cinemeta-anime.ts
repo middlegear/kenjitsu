@@ -314,8 +314,23 @@ class Cinemeta extends BaseClass {
 
     return score;
   }
+  /**
+   * Hard disqualifiers based on AniList metadata. A candidate that is
+   * knocked out is never scored, regardless of title similarity.
+   */
+  private isKnockedOut(candidate: ICineMetaSearch, anime: IMetaAnime): boolean {
+    const episodes = anime.episodes;
+
+    // Multi-episode anime can't be a movie entry
+    if (typeof episodes === 'number' && episodes > 1 && candidate.type === 'movie') {
+      return true;
+    }
+
+    return false;
+  }
 
   private findBestMatch(
+    anime: IMetaAnime,
     title: string,
     year: number | null,
     candidates: ICineMetaSearch[],
@@ -327,6 +342,8 @@ class Cinemeta extends BaseClass {
     let bestScore = -Infinity;
 
     for (const candidate of candidates) {
+      if (this.isKnockedOut(candidate, anime)) continue;
+
       const similarity = this.calculateTitleSimilarity(title, candidate.name ?? '');
 
       if (similarity < minThreshold) continue;
@@ -344,6 +361,7 @@ class Cinemeta extends BaseClass {
 
     return best;
   }
+
   private async search(query: string): Promise<IResponse<ICineMetaSearch[] | []>> {
     if (!query) {
       return {
@@ -414,7 +432,7 @@ class Cinemeta extends BaseClass {
       const mediaSearch = await this.search(animeTitle);
 
       if (!mediaSearch.error && mediaSearch.data?.length > 0) {
-        const match = this.findBestMatch(animeTitle, animeYear, mediaSearch.data, 0.6);
+        const match = this.findBestMatch(animeData, animeTitle, animeYear, mediaSearch.data, 0.6);
 
         if (match) {
           return {
@@ -489,7 +507,7 @@ class Cinemeta extends BaseClass {
         return {
           data: episodeList.data.map((ep, index) => ({
             ...ep,
-            absoluteEpisodeNumber: index + 1,
+            episodeNumber: index + 1,
             kitsuId: kitsuId.data?.kitsuId ? Number(kitsuId.data?.kitsuId) : null,
           })),
         };

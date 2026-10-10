@@ -14,7 +14,7 @@ export interface ICinemetaEpisode {
   title: string;
   airDate: string;
   seasonNumber: number | null;
-  episodeNumber: number | null;
+  seasonEpisodeNumber: number | null;
   thumbnail: string;
   summary: string;
   type: string;
