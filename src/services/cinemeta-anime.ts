@@ -315,18 +315,41 @@ class Cinemeta extends BaseClass {
     return score;
   }
   /**
-   * Hard disqualifiers based on AniList metadata. A candidate that is
+   * Hard disqualifiers based on AniList/Kitsu metadata. A candidate that is
    * knocked out is never scored, regardless of title similarity.
+   *
+   * Determines whether AniList/Kitsu says this entry is a movie or a series
+   * (format, episode count, duration) and knocks out candidates of the
+   * other type. Inconclusive metadata knocks out nothing.
    */
   private isKnockedOut(candidate: ICineMetaSearch, anime: IMetaAnime): boolean {
-    const episodes = anime.episodes;
+    const candidateType = candidate.type?.toLowerCase();
 
-    // Multi-episode anime can't be a movie entry
-    if (typeof episodes === 'number' && episodes > 1 && candidate.type === 'movie') {
-      return true;
+    // Unknown candidate type: don't knock out on missing data
+    if (candidateType !== 'movie' && candidateType !== 'series') return false;
+
+    const format = anime.format?.toUpperCase() ?? null;
+    const episodes = typeof anime.episodes === 'number' ? anime.episodes : null;
+    const duration = typeof anime.duration === 'number' && anime.duration > 0 ? anime.duration : null;
+
+    let expected: CinemetaMediaType | null = null;
+
+    if (format === 'MOVIE') {
+      expected = 'movie';
+    } else if (episodes !== null && episodes > 1) {
+      expected = 'series';
+    } else if (duration !== null) {
+      if (duration > 30) {
+        // Standard  is ~20-25 min, movies are longer than 30.
+        expected = episodes === null ? 'series' : 'movie';
+      } else if (episodes !== 1) {
+        expected = 'series';
+      }
     }
 
-    return false;
+    if (expected === null) return false;
+
+    return candidateType !== expected;
   }
 
   private findBestMatch(
