@@ -100,9 +100,7 @@ export interface IAnimeListItem {
   name: string;
   originalName: string;
   posterImage: string | null;
-
   backdrop: string | null;
-
   rating: number | null;
   genres: string;
   episodes: number | string | null;

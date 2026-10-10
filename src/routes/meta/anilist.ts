@@ -4,6 +4,8 @@ import { redisGetCache, redisSetCache } from '../../config/redis.js';
 import { Anilist } from '../../providers/meta/anilist.js';
 import { type FastifyQuery, type FastifyParams, IAMetaFormatArr, allowedAnimeProviders } from '../../types/base.js';
 import { Seasons, type IMetaFormat } from '../../types/meta/meta-anime.js';
+import { Cinemeta } from '../../services/cinemeta-anime.js';
+import { AnimeInfoResolver } from '../../services/anime-resolver.js';
 
 const anilist = new Anilist();
 
@@ -203,7 +205,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     if (cachedData) return reply.status(200).send(cachedData);
 
     try {
-      const result = await anilist.fetchEpisodes(Number(id));
+      const result = await new Cinemeta(new AnimeInfoResolver()).fetchAnimeEpisode(Number(id));
       if (!result || typeof result !== 'object') {
         return reply.status(502).send({ error: 'Invalid response' });
       }

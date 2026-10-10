@@ -1704,59 +1704,6 @@ export class Anilist extends BaseClass {
       };
     }
   }
-  /**
-   * Fetches episode details for a given media ID from the TVDb metadata service
-   * and maps them into standardized `IMetaAnimeEpisode` objects.
-   *
-   * Uses `absoluteEpisodeNumber` from TVDb as the primary `episodeNumber`.
-   *
-   * @param id - The unique media identifier (e.g., AniList ID).
-   * @returns A promise containing an array of mapped `IMetaAnimeEpisode` objects, or an empty array if an error occurs.
-   */
-  async fetchEpisodes(id: number): Promise<IResponse<IMetaAnimeEpisode[] | []>> {
-    if (!id) return { error: `Missing required param: id`, data: [], status: 400 };
-
-    try {
-      const response = await this.client.fetch(`https://api.kenjitsu.workers.dev/api/meta/anilist/${id}?platform=merged`, {
-        method: 'GET',
-      });
-      if (!response.ok) {
-        return {
-          data: [],
-          error: response.statusText,
-          status: response.status,
-        };
-      }
-      const kitsu = await new Kitsu().fetchMapping(id);
-      if (kitsu.error || !kitsu.data) {
-        console.error(kitsu.error);
-      }
-      const kitsuId = kitsu.data?.id;
-      const tvdbResult = await response.json();
-
-      const episodes = tvdbResult.data.episodes.map((item: any) => ({
-        kitsuId: kitsuId ? Number(kitsuId) : null,
-        airDate: item.airDate,
-        title: item.title,
-        thumbnail: item.image,
-        isFiller: null,
-        episodeNumber: item.absoluteEpisodeNumber,
-        summary: item.summary,
-        imdbId: item.imdbId || null,
-        tvdbIdEpisodeId: item.tvdbEpisodeId,
-        seasonNumber: item.seasonNumber,
-        seasonEpisodeNumber: item.episodeNumber,
-        type: item.type,
-      }));
-      return { data: episodes };
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-        data: [],
-        status: 500,
-      };
-    }
-  }
 
   private async resolveAnimeInfo(anilistId: number): Promise<IResponse<IMetaAnime | null>> {
     const anilistResult = await this.fetchInfo(anilistId, 'ANIME');
