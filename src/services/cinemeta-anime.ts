@@ -248,6 +248,57 @@ class Cinemeta extends BaseClass {
     return raw ? this.cleanTitle(raw) : undefined;
   }
 
+  /**
+   * Titles to search Cinemeta with, in order: the preferred title
+   * (english, then english synonym, ...), then romaji as a fallback.
+   * Deduped so a missing english title doesn't search romaji twice.
+   */
+  private extractSearchQueries(media: IMetaAnime, maxQueries = 5): string[] {
+    const candidates = [
+      this.extractTitle(media),
+      media.title.romaji,
+      ...(media.synonyms ?? []).filter(synonym => /^[\x00-\x7F]*$/.test(synonym)),
+    ];
+
+    const seen = new Set<string>();
+    const queries: string[] = [];
+
+    for (const query of candidates) {
+      const key = query?.toLowerCase().trim();
+
+      if (!query || !key || seen.has(key)) continue;
+
+      seen.add(key);
+      queries.push(query);
+
+      if (queries.length >= maxQueries) break;
+    }
+
+    return queries;
+  }
+
+  /** Every AniList title for this entry, cleaned and deduped. */
+  private extractAllTitles(media: IMetaAnime): string[] {
+    const raw = [media.title.english, media.title.romaji, ...(media.synonyms ?? []), media.title.native];
+
+    const seen = new Set<string>();
+    const titles: string[] = [];
+
+    for (const title of raw) {
+      if (!title) continue;
+
+      const cleaned = this.cleanTitle(title); // might be detrimental, test before
+      const key = cleaned.toLowerCase();
+
+      if (!cleaned || seen.has(key)) continue;
+
+      seen.add(key);
+      titles.push(cleaned);
+    }
+
+    return titles;
+  }
+
   private normalizeDate(dateStr: string | null | undefined): Date | null {
     if (!dateStr) return null;
 
@@ -337,27 +388,7 @@ class Cinemeta extends BaseClass {
 
     return candidateType !== expected;
   }
-  /** Every AniList title for this entry, cleaned and deduped. */
-  private extractAllTitles(media: IMetaAnime): string[] {
-    const raw = [media.title.english, media.title.romaji, ...(media.synonyms ?? []), media.title.native];
 
-    const seen = new Set<string>();
-    const titles: string[] = [];
-
-    for (const title of raw) {
-      if (!title) continue;
-
-      const cleaned = this.cleanTitle(title); // might be detrimental test before
-      const key = cleaned.toLowerCase();
-
-      if (!cleaned || seen.has(key)) continue;
-
-      seen.add(key);
-      titles.push(cleaned);
-    }
-
-    return titles;
-  }
   private findBestMatch(
     anime: IMetaAnime,
     titles: string[],
@@ -369,6 +400,7 @@ class Cinemeta extends BaseClass {
 
     for (const candidate of candidates) {
       if (this.isKnockedOut(candidate, anime)) continue;
+
       const score = Math.max(...titles.map(title => this.calculateTitleSimilarity(title, candidate.name ?? '')));
 
       if (score < minThreshold) continue;
@@ -435,9 +467,9 @@ class Cinemeta extends BaseClass {
         };
       }
 
-      const animeTitle = this.extractTitle(animeData);
+      const queries = this.extractSearchQueries(animeData);
 
-      if (!animeTitle) {
+      if (queries.length === 0) {
         return {
           data: null,
           error: 'Could not resolve anime title',
@@ -445,10 +477,14 @@ class Cinemeta extends BaseClass {
         };
       }
 
-      const mediaSearch = await this.search(animeTitle);
+      const titles = this.extractAllTitles(animeData);
 
-      if (!mediaSearch.error && mediaSearch.data?.length > 0) {
-        const match = this.findBestMatch(animeData, this.extractAllTitles(animeData), mediaSearch.data, 0.6);
+      for (const query of queries) {
+        const mediaSearch = await this.search(query);
+
+        if (mediaSearch.error || !mediaSearch.data?.length) continue;
+
+        const match = this.findBestMatch(animeData, titles, mediaSearch.data, 0.6);
 
         if (match) {
           return { data: match };
