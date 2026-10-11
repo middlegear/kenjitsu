@@ -130,7 +130,6 @@ export class MegaPlay extends BaseClass {
       }
 
       const getSourcesUrl = this.buildGetSourcesUrl(videoUrl, id);
-      console.log(getSourcesUrl);
 
       const response = await this.client.fetch(getSourcesUrl, {
         method: 'GET',

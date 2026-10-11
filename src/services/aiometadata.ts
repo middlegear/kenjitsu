@@ -110,7 +110,8 @@ class AIOMetadata extends BaseClass {
       }
 
       const result = (await response.json()) as any;
-      let episodes: ICinemetaEpisode[] = [];
+
+      let episodes: ICinemetaEpisode[];
 
       if (mediaType === 'movie')
         episodes = [
@@ -140,15 +141,17 @@ class AIOMetadata extends BaseClass {
         }));
       }
 
-      const endOfToday = new Date();
-      endOfToday.setHours(23, 59, 59, 999);
+      if (mediaType === 'series') {
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
 
-      episodes = episodes.filter(episode => {
-        if (!episode.airDate) return false;
+        episodes = episodes.filter(episode => {
+          if (!episode.airDate) return false;
 
-        const airDate = new Date(episode.airDate);
-        return !isNaN(airDate.getTime()) && airDate <= endOfToday;
-      });
+          const airDate = new Date(episode.airDate);
+          return !isNaN(airDate.getTime()) && airDate <= endOfToday;
+        });
+      }
       const episodeResult: IResponse<ICinemetaEpisode[]> = {
         data: episodes,
       };

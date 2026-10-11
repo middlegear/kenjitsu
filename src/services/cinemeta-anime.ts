@@ -1,3 +1,4 @@
+import { token_sort_ratio } from 'fuzzball';
 import type { ClientOptions } from '../config/client.js';
 import { redisGetCache, redisSetCache } from '../config/redis.js';
 import { BaseClass } from '../providers/models/base.js';
@@ -16,10 +17,18 @@ class Cinemeta extends BaseClass {
   ) {
     super(options);
   }
+
   private static readonly MONTH_ABBR = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
   private readonly baseUrl = 'https://v3-cinemeta.strem.io';
   private readonly mediaTypes: CinemetaMediaType[] = ['movie', 'series'];
+
+  /**
+   * Maximum acceptable distance, in days, between an anime's releaseDate
+   * and the nearest episode airDate for that airDate to be trusted as
+   * the anchor.
+   */
+  private readonly DATE_ANCHOR_TOLERANCE_DAYS = 7;
 
   // Interleaves result lists (movie, series, movie, series...) and dedupes by id
   private mergeResults(lists: ICineMetaSearch[][]): ICineMetaSearch[] {
@@ -39,6 +48,7 @@ class Cinemeta extends BaseClass {
 
     return merged;
   }
+
   private selectCandidateEpisodes(episodes: ICinemetaEpisode[], animeFormat: string | null): ICinemetaEpisode[] {
     if (animeFormat === 'tv') {
       return episodes.filter(ep => (ep.seasonNumber ?? 0) >= 1);
@@ -47,65 +57,6 @@ class Cinemeta extends BaseClass {
     return episodes;
   }
 
-  /**
-   * Finds the pool episode whose airDate is numerically closest to
-   * `target`, along with how far off it actually is.
-   *
-   * Returns null if no episode in the pool has a usable airDate.
-   */
-  private findClosestDateMatch(pool: ICinemetaEpisode[], target: Date): { index: number; diffDays: number } | null {
-    let bestIdx = -1;
-    let bestDiffMs = Infinity;
-
-    pool.forEach((ep, idx) => {
-      const epDate = this.normalizeDate(ep.airDate);
-
-      if (!epDate) return;
-
-      const diff = Math.abs(epDate.getTime() - target.getTime());
-
-      if (diff < bestDiffMs) {
-        bestDiffMs = diff;
-        bestIdx = idx;
-      }
-    });
-
-    if (bestIdx === -1) return null;
-
-    return {
-      index: bestIdx,
-      diffDays: bestDiffMs / (1000 * 60 * 60 * 24),
-    };
-  }
-  /**
-   * FIX: month-precision fallback anchor.
-   *
-   * Cinemeta/IMDb often only knows "September 2026" for a not-yet-dated
-   * episode and stores it as the 1st of the month (e.g. 2026-09-01), while
-   * AniList/Kitsu know the exact day (2026-09-25). Day-for-day comparison
-   * then fails the tolerance check even though the episode is the right one.
-   *
-   * An episode dated on the 1st of the SAME calendar month as the target
-   * start date is treated as a month-precision match. Only used after the
-   * normal tolerance-based anchor has failed, and it takes the earliest such
-   * episode in the (sorted) pool.
-   */
-  private findMonthPrecisionMatch(pool: ICinemetaEpisode[], target: Date): number | null {
-    for (let i = 0; i < pool.length; i++) {
-      const d = this.normalizeDate(pool[i].airDate);
-      if (!d) continue;
-
-      if (
-        d.getUTCDate() === 1 &&
-        d.getUTCFullYear() === target.getUTCFullYear() &&
-        d.getUTCMonth() === target.getUTCMonth()
-      ) {
-        return i;
-      }
-    }
-
-    return null;
-  }
   /**
    * Returns whether the anime start date is recent enough to use the
    * normal Cinemeta episode list.
@@ -118,77 +69,115 @@ class Cinemeta extends BaseClass {
   private isRecentStartDate(startDate: Date | null): boolean {
     if (!startDate) return true;
 
-    const now = new Date();
-    const diffMs = now.getTime() - startDate.getTime();
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    const diffDays = (Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24);
 
     return diffDays <= this.DATE_ANCHOR_TOLERANCE_DAYS;
   }
+
   /**
-   * Maximum acceptable distance, in days, between an anime's releaseDate
-   * and the nearest episode airDate for that airDate to be trusted as
-   * the anchor.
+   * Finds the index in `sorted` where this anime's episodes begin.
+   *
+   * Tier 1: nearest airDate within DATE_ANCHOR_TOLERANCE_DAYS.
+   * Tier 2: month-precision match. Cinemeta often stores month-only dates
+   *         as the 1st of the month, so an episode dated the 1st in the
+   *         same, next, then previous month (in that order) is accepted.
+   * Tier 3: nearest episode dated in the target month or the next. Covers
+   *         streaming-first releases (e.g. Stone Ocean: AniList 2021-12-01,
+   *         Cinemeta 2022-01-08).
+   *
+   * Specials (season 0) are ignored in tiers 2 and 3.
+   * Returns null when nothing qualifies.
    */
-  private readonly DATE_ANCHOR_TOLERANCE_DAYS = 7;
+  private findAnchorIndex(sorted: ICinemetaEpisode[], startDate: Date): number | null {
+    const DAY = 86_400_000;
+    const monthIdx = (d: Date) => d.getUTCFullYear() * 12 + d.getUTCMonth();
+    const targetMonth = monthIdx(startDate);
 
-  private resolveEpisodeRange(anime: IMetaAnime, allEpisodes: ICinemetaEpisode[]): ICinemetaEpisode[] {
-    const startDate = this.normalizeDate(anime.releaseDate);
-    const endDate = this.normalizeDate(anime.endDate);
-    const episodeCount = anime.episodes;
+    let nearestIdx = -1;
+    let nearestDiff = Infinity;
+    let windowIdx = -1;
+    let windowDiff = Infinity;
+    const firstOfMonth = new Map<number, number>(); // month offset -> first matching index
 
-    const animeFormat = anime.format?.toLowerCase() ?? null;
-    const pool = this.selectCandidateEpisodes(allEpisodes, animeFormat);
+    sorted.forEach((ep, i) => {
+      const d = this.normalizeDate(ep.airDate);
+      if (!d) return;
 
-    const sorted = [...pool].sort((a, b) => {
-      const seasonDiff = (a.seasonNumber ?? 0) - (b.seasonNumber ?? 0);
-
-      if (seasonDiff !== 0) return seasonDiff;
-
-      const epDiff = (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0);
-
-      if (epDiff !== 0) return epDiff;
-
-      const da = this.normalizeDate(a.airDate)?.getTime() ?? 0;
-      const db = this.normalizeDate(b.airDate)?.getTime() ?? 0;
-
-      return da - db;
-    });
-
-    if (!startDate) {
-      return sorted;
-    }
-
-    const closest = this.findClosestDateMatch(sorted, startDate);
-
-    let anchorIdx: number;
-
-    if (closest && closest.diffDays <= this.DATE_ANCHOR_TOLERANCE_DAYS) {
-      anchorIdx = closest.index;
-    } else {
-      const monthMatch = this.findMonthPrecisionMatch(sorted, startDate);
-
-      if (monthMatch === null) {
-        return [];
+      const diff = Math.abs(d.getTime() - startDate.getTime());
+      if (diff < nearestDiff) {
+        nearestDiff = diff;
+        nearestIdx = i;
       }
 
-      anchorIdx = monthMatch;
+      if ((ep.seasonNumber ?? 0) === 0) return;
+
+      const offset = monthIdx(d) - targetMonth;
+
+      if (offset >= 0 && offset <= 1 && diff < windowDiff) {
+        windowDiff = diff;
+        windowIdx = i;
+      }
+
+      if (d.getUTCDate() === 1 && !firstOfMonth.has(offset)) {
+        firstOfMonth.set(offset, i);
+      }
+    });
+
+    if (nearestIdx !== -1 && nearestDiff / DAY <= this.DATE_ANCHOR_TOLERANCE_DAYS) {
+      return nearestIdx;
     }
 
+    for (const offset of [0, 1, -1]) {
+      const idx = firstOfMonth.get(offset);
+      if (idx !== undefined) return idx;
+    }
+
+    return windowIdx !== -1 ? windowIdx : null;
+  }
+
+  /**
+   * Resolves which Cinemeta episodes belong to this anime entry:
+   * 1. find the start anchor
+   * 2. take `episodes` count from the anchor
+   * 3. otherwise everything from the anchor up to endDate
+   * 4. otherwise everything from the anchor onward
+   */
+  private resolveEpisodeRange(anime: IMetaAnime, allEpisodes: ICinemetaEpisode[]): ICinemetaEpisode[] {
+    const startDate = this.normalizeDate(anime.releaseDate);
+    const rawEnd = this.normalizeDate(anime.endDate);
+    const episodeCount = anime.episodes;
+
+    // endDate === startDate means a batch drop, not a usable end boundary
+    const endDate = rawEnd && startDate && rawEnd.getTime() === startDate.getTime() ? null : rawEnd;
+
+    const pool = this.selectCandidateEpisodes(allEpisodes, anime.format?.toLowerCase() ?? null);
+
+    const sorted = [...pool].sort(
+      (a, b) =>
+        (a.seasonNumber ?? 0) - (b.seasonNumber ?? 0) ||
+        (a.seasonEpisodeNumber ?? a.episodeNumber ?? 0) - (b.seasonEpisodeNumber ?? b.episodeNumber ?? 0) ||
+        (this.normalizeDate(a.airDate)?.getTime() ?? 0) - (this.normalizeDate(b.airDate)?.getTime() ?? 0),
+    );
+
+    if (!startDate) return sorted;
+
+    const anchorIdx = this.findAnchorIndex(sorted, startDate);
+    if (anchorIdx === null) return [];
+
+    const fromStart = sorted.slice(anchorIdx);
+
     if (typeof episodeCount === 'number' && episodeCount > 0) {
-      return sorted.slice(anchorIdx, anchorIdx + episodeCount);
+      return fromStart.slice(0, episodeCount);
     }
 
     if (endDate) {
-      return sorted.filter(ep => {
-        const epDate = this.normalizeDate(ep.airDate);
-
-        if (!epDate) return false;
-
-        return epDate.getTime() >= startDate.getTime() && epDate.getTime() <= endDate.getTime();
+      return fromStart.filter(ep => {
+        const d = this.normalizeDate(ep.airDate);
+        return d !== null && d <= endDate;
       });
     }
 
-    return sorted.slice(anchorIdx);
+    return fromStart;
   }
 
   private async fetchCatalog(query: string, mediaType: CinemetaMediaType): Promise<IResponse<ICineMetaSearch[]>> {
@@ -223,22 +212,30 @@ class Cinemeta extends BaseClass {
     }
   }
 
-  private levenshtein(a: string, b: string): number {
-    const rows = a.length + 1;
-    const cols = b.length + 1;
-    const matrix: number[][] = Array.from({ length: rows }, () => new Array(cols).fill(0));
+  /**
+   * Strips season / cour / part markers and trailing roman numerals so
+   * the title is the bare franchise name. Falls back to the original
+   * title if stripping would leave nothing.
+   */
+  private cleanTitle(title: string): string {
+    const ORDINAL = '(?:\\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|final)';
+    const ROMAN = '(?:II|III|IV|V|VI|VII|VIII|IX|X)';
 
-    for (let i = 0; i < rows; i++) matrix[i][0] = i;
-    for (let j = 0; j < cols; j++) matrix[0][j] = j;
+    const cleaned = title
+      // "2nd Season", "Final Season", "Third Cour", "Second Part"
+      .replace(new RegExp(`\\b${ORDINAL}\\s+(?:season|cour|part)\\b`, 'gi'), ' ')
+      // "Season 2", "Cour 2", "Part 4", "Season II"
+      .replace(new RegExp(`\\b(?:season|cour|part)\\s*(?:\\d+|${ROMAN})\\b`, 'gi'), ' ')
+      // "S2", "S02"
+      .replace(/\bS\d{1,2}\b/g, ' ')
+      // Trailing roman numeral: "Overlord IV", "Overlord IV: ..." (uppercase only)
+      .replace(new RegExp(`\\s+${ROMAN}(?=\\s*(?:[:\\-–]|$))`, 'g'), '')
+      // Dangling punctuation left behind
+      .replace(/\s*[:\-–,]+\s*$/, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
 
-    for (let i = 1; i < rows; i++) {
-      for (let j = 1; j < cols; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
-      }
-    }
-
-    return matrix[rows - 1][cols - 1];
+    return cleaned || title.trim();
   }
 
   private extractTitle(media: IMetaAnime): string | undefined {
@@ -246,7 +243,9 @@ class Cinemeta extends BaseClass {
       ? media.synonyms?.find(synonym => /^[\x00-\x7F]*$/.test(synonym))
       : undefined;
 
-    return media.title.english || englishSynonym || media.title.romaji || media.title.native || undefined;
+    const raw = media.title.english || englishSynonym || media.title.romaji || media.title.native || undefined;
+
+    return raw ? this.cleanTitle(raw) : undefined;
   }
 
   private normalizeDate(dateStr: string | null | undefined): Date | null {
@@ -267,20 +266,6 @@ class Cinemeta extends BaseClass {
     return null;
   }
 
-  private extractYear(releaseDate: string | null | number | undefined): number | null {
-    if (releaseDate === null || releaseDate === undefined) return null;
-
-    if (typeof releaseDate === 'number') {
-      return releaseDate > 1000 && releaseDate < 3000 ? releaseDate : null;
-    }
-
-    const parsed = this.normalizeDate(releaseDate);
-    if (parsed) return parsed.getUTCFullYear();
-
-    const bare = releaseDate.trim().match(/^(\d{4})$/);
-    return bare ? Number(bare[1]) : null;
-  }
-
   private calculateTitleSimilarity(target: string, candidate: string): number {
     const normTarget = target.toLowerCase().trim();
     const normCandidate = candidate.toLowerCase().trim();
@@ -288,32 +273,33 @@ class Cinemeta extends BaseClass {
     if (!normTarget || !normCandidate) return 0;
     if (normTarget === normCandidate) return 1.0;
 
-    const distance = this.levenshtein(normTarget, normCandidate);
-    const maxLen = Math.max(normTarget.length, normCandidate.length, 1);
-    const levSimilarity = 1 - distance / maxLen;
+    const sortSimilarity = token_sort_ratio(normTarget, normCandidate) / 100;
 
-    const isSubstring = normTarget.includes(normCandidate) || normCandidate.includes(normTarget);
-
-    const targetTokens = new Set(normTarget.split(/[\s:,\-_]+/).filter(Boolean));
-    const candidateTokens = new Set(normCandidate.split(/[\s:,\-_]+/).filter(Boolean));
+    const targetTokens = new Set(normTarget.split(/[\s:,\-_!?.]+/).filter(Boolean));
+    const candidateTokens = new Set(normCandidate.split(/[\s:,\-_!?.]+/).filter(Boolean));
 
     let overlap = 0;
-
     for (const token of targetTokens) {
       if (candidateTokens.has(token)) overlap++;
     }
 
-    const minTokenCount = Math.min(targetTokens.size, candidateTokens.size);
-    const tokenSimilarity = minTokenCount > 0 ? overlap / minTokenCount : 0;
+    // Divide by the LARGER set so one shared word can't score 1.0
+    const maxTokenCount = Math.max(targetTokens.size, candidateTokens.size);
+    const tokenSimilarity = maxTokenCount > 0 ? overlap / maxTokenCount : 0;
 
-    let score = Math.max(levSimilarity, tokenSimilarity);
+    let score = Math.max(sortSimilarity, tokenSimilarity);
 
-    if (isSubstring && score < 0.75) {
+    // Substring floor only when the shorter title is a big part of the longer one
+    const [shorter, longer] =
+      normTarget.length <= normCandidate.length ? [normTarget, normCandidate] : [normCandidate, normTarget];
+
+    if (longer.includes(shorter) && shorter.length / longer.length >= 0.5 && score < 0.75) {
       score = 0.75;
     }
 
     return score;
   }
+
   /**
    * Hard disqualifiers based on AniList/Kitsu metadata. A candidate that is
    * knocked out is never scored, regardless of title similarity.
@@ -340,7 +326,7 @@ class Cinemeta extends BaseClass {
       expected = 'series';
     } else if (duration !== null) {
       if (duration > 30) {
-        // Standard  is ~20-25 min, movies are longer than 30.
+        // Standard episode is ~20-25 min, movies are longer than 30.
         expected = episodes === null ? 'series' : 'movie';
       } else if (episodes !== 1) {
         expected = 'series';
@@ -351,30 +337,41 @@ class Cinemeta extends BaseClass {
 
     return candidateType !== expected;
   }
+  /** Every AniList title for this entry, cleaned and deduped. */
+  private extractAllTitles(media: IMetaAnime): string[] {
+    const raw = [media.title.english, media.title.romaji, ...(media.synonyms ?? []), media.title.native];
 
+    const seen = new Set<string>();
+    const titles: string[] = [];
+
+    for (const title of raw) {
+      if (!title) continue;
+
+      const cleaned = this.cleanTitle(title); // might be detrimental test before
+      const key = cleaned.toLowerCase();
+
+      if (!cleaned || seen.has(key)) continue;
+
+      seen.add(key);
+      titles.push(cleaned);
+    }
+
+    return titles;
+  }
   private findBestMatch(
     anime: IMetaAnime,
-    title: string,
-    year: number | null,
+    titles: string[],
     candidates: ICineMetaSearch[],
     minThreshold: number = 0.7,
   ): ICineMetaSearch | null {
-    if (candidates.length === 0) return null;
-
     let best: ICineMetaSearch | null = null;
     let bestScore = -Infinity;
 
     for (const candidate of candidates) {
       if (this.isKnockedOut(candidate, anime)) continue;
+      const score = Math.max(...titles.map(title => this.calculateTitleSimilarity(title, candidate.name ?? '')));
 
-      const similarity = this.calculateTitleSimilarity(title, candidate.name ?? '');
-
-      if (similarity < minThreshold) continue;
-
-      const parsedStartYear = candidate.startYear ? Number.parseInt(String(candidate.startYear), 10) : NaN;
-      const candidateYear = Number.isNaN(parsedStartYear) ? null : parsedStartYear;
-      const yearMatch = year !== null && candidateYear !== null && candidateYear === Number(year);
-      const score = similarity + (yearMatch ? 0.3 : 0);
+      if (score < minThreshold) continue;
 
       if (score > bestScore) {
         bestScore = score;
@@ -398,7 +395,9 @@ class Cinemeta extends BaseClass {
     const cached = await redisGetCache<IResponse<ICineMetaSearch[] | []>>(cacheKey);
     if (cached) return cached;
 
-    const results = await Promise.all(this.mediaTypes.map(mediaType => this.fetchCatalog(query, mediaType)));
+    const results = await Promise.all(
+      this.mediaTypes.map(mediaType => this.fetchCatalog(encodeURIComponent(query), mediaType)),
+    );
     const failed = results.filter(r => r.error);
 
     // Both failed -> surface the error
@@ -426,9 +425,6 @@ class Cinemeta extends BaseClass {
     preResolvedAnimeData?: IMetaAnime,
   ): Promise<IResponse<ICineMetaSearch | null>> {
     try {
-      /* ---------------------------------------------------------------------- */
-      /* STEP 1: Resolve queried anime                                          */
-      /* ---------------------------------------------------------------------- */
       const animeData = preResolvedAnimeData ?? (await this.resolver.resolveAnimeInfo(anilistId)).data;
 
       if (!animeData) {
@@ -440,9 +436,6 @@ class Cinemeta extends BaseClass {
       }
 
       const animeTitle = this.extractTitle(animeData);
-      const releaseDate = 'year' in animeData && animeData.year ? animeData.year : animeData.releaseDate;
-
-      const animeYear = this.extractYear(releaseDate);
 
       if (!animeTitle) {
         return {
@@ -455,12 +448,10 @@ class Cinemeta extends BaseClass {
       const mediaSearch = await this.search(animeTitle);
 
       if (!mediaSearch.error && mediaSearch.data?.length > 0) {
-        const match = this.findBestMatch(animeData, animeTitle, animeYear, mediaSearch.data, 0.6);
+        const match = this.findBestMatch(animeData, this.extractAllTitles(animeData), mediaSearch.data, 0.6);
 
         if (match) {
-          return {
-            data: match,
-          };
+          return { data: match };
         }
       }
 
@@ -521,17 +512,20 @@ class Cinemeta extends BaseClass {
           status: episodeList.status,
         };
       }
+
       const kitsuId = await aioMetadata.fetchAnimeMappings(anilistId);
       if (kitsuId.error || !kitsuId.data) {
         console.error(kitsuId.error);
       }
+
+      const kitsuIdNumber = kitsuId.data?.kitsuId ? Number(kitsuId.data.kitsuId) : null;
 
       if (format === 'movie') {
         return {
           data: episodeList.data.map((ep, index) => ({
             ...ep,
             episodeNumber: index + 1,
-            kitsuId: kitsuId.data?.kitsuId ? Number(kitsuId.data?.kitsuId) : null,
+            kitsuId: kitsuIdNumber,
           })),
         };
       }
@@ -548,7 +542,7 @@ class Cinemeta extends BaseClass {
         (ep, index) => ({
           ...ep,
           episodeNumber: index + 1,
-          kitsuId: kitsuId.data?.kitsuId ? Number(kitsuId.data?.kitsuId) : null,
+          kitsuId: kitsuIdNumber,
         }),
       );
 

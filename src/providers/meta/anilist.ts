@@ -180,7 +180,7 @@ export class Anilist extends BaseClass {
           status: 404,
         };
       }
-      // console.log(searchResults);
+
       const match = findBestMatch(
         anilist.data.title,
         searchResults.data.map(item => ({
