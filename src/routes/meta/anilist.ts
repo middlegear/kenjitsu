@@ -14,8 +14,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     '/anime/search',
 
     async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${148 * 60 * 60}, stale-while-revalidate=300`);
-
       const { q, page = 1 } = request.query;
       if (!q) return reply.status(400).send({ error: "Missing 'q' parameter" });
       if (q.length > 1000) return reply.status(400).send({ error: 'Query too long' });
@@ -38,7 +36,10 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         if (result?.data?.length > 0) {
           await redisSetCache(cacheKey, result, 168);
         }
-        return reply.status(200).send(result);
+        return reply
+          .status(200)
+          .send(result)
+          .header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
       } catch (error) {
         return reply.status(500).send({ error: 'Internal server error' });
       }
@@ -48,8 +49,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     '/anime/:id',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
-
       const id = Number(request.params.id);
       if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
 
@@ -66,11 +65,15 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
         const isFinished = result.data?.status!.toUpperCase() === 'FINISHED';
-        const duration = isFinished ? 168 : 1;
+        const duration = isFinished ? 730 : 1;
         if (result.data) {
           await redisSetCache(cacheKey, result, duration);
         }
-        return reply.status(200).send(result);
+
+        return reply
+          .status(200)
+          .send(result)
+          .header('Cache-Control', `public, s-maxage=${duration * 60 * 60}, stale-while-revalidate=300`);
       } catch (error) {
         return reply.status(500).send({ error: 'Internal server error' });
       }
