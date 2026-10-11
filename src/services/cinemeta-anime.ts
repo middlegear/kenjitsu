@@ -335,15 +335,13 @@ class Cinemeta extends BaseClass {
 
     const last = episodes[episodes.length - 1];
     const lastNumber = last.episodeNumber ?? episodes.length;
-
-    const INTERVAL_SEC = 604_800; // not what i expect
+    const INTERVAL_SEC = 604_800; // weekly fallback when no schedule data
 
     const padded: ICinemetaEpisode[] = [];
 
     for (let ep = lastNumber + 1; ep <= targetCount; ep++) {
       const seasonEpisodeNumber = last.seasonEpisodeNumber != null ? last.seasonEpisodeNumber + (ep - lastNumber) : null;
 
-      // Step the air date forward from the last known one
       const lastAir = this.normalizeDate(last.airDate);
       const airDate = lastAir
         ? new Date(lastAir.getTime() + (ep - lastNumber) * INTERVAL_SEC * 1000).toISOString()
@@ -381,11 +379,9 @@ class Cinemeta extends BaseClass {
 
       if (typeof expected === 'number' && expected > 0) {
         if (episodes.length > expected) {
-          // Truncate excess (shouldn't normally happen after resolveEpisodeRange)
           return { data: episodes.slice(0, expected) };
         }
         if (episodes.length < expected) {
-          // Cinemeta missing data → pad using the last real episode as template
           return { data: this.padEpisodes(episodes, expected) };
         }
       }
@@ -773,7 +769,6 @@ class Cinemeta extends BaseClass {
 
       const kitsuIdNumber = kitsuId.data?.kitsuId ? Number(kitsuId.data.kitsuId) : null;
 
-      // Numbers episodes 1..n and attaches the Kitsu id
       const withIds = (episodes: ICinemetaEpisode[]) =>
         episodes.map((ep, index) => ({
           ...ep,
@@ -785,13 +780,9 @@ class Cinemeta extends BaseClass {
         return { data: withIds(episodeList.data as ICinemetaEpisode[]) };
       }
 
-      if (episodeList.data.length === 1) {
-        return this.finalizeEpisodes(anilistId, animeData, withIds(episodeList.data as ICinemetaEpisode[]));
-      }
-
       const startDate = this.normalizeDate(animeData.releaseDate);
 
-      const narrowedEpisodes = withIds(this.resolveEpisodeRange(animeData, episodeList.data as ICinemetaEpisode[]));
+      const narrowedEpisodes = this.resolveEpisodeRange(animeData, episodeList.data as ICinemetaEpisode[]);
 
       if (narrowedEpisodes.length === 0) {
         return {
@@ -803,7 +794,13 @@ class Cinemeta extends BaseClass {
         };
       }
 
-      return this.finalizeEpisodes(anilistId, animeData, narrowedEpisodes);
+      const finalized = await this.finalizeEpisodes(anilistId, animeData, narrowedEpisodes);
+
+      if (finalized.error || !finalized.data) {
+        return finalized;
+      }
+
+      return { data: withIds(finalized.data) };
     } catch (error) {
       return {
         data: [],

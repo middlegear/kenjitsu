@@ -113,34 +113,36 @@ class AIOMetadata extends BaseClass {
 
       let episodes: ICinemetaEpisode[];
 
-      if (mediaType === 'movie')
+      // inside fetchEpisodes, replace the two episode-building blocks with:
+
+      if (mediaType === 'movie') {
         episodes = [
           {
-            title: result.meta.name,
-            airDate: result.meta.released,
+            title: result.meta.name ?? null,
+            airDate: result.meta.released ?? null,
             seasonNumber: null,
             seasonEpisodeNumber: null,
-            thumbnail: result.meta.background ?? result.meta.landscapePoster,
+            thumbnail: result.meta.background ?? result.meta.landscapePoster ?? null,
             id: id,
-            summary: result.meta.description,
-            imdbId: result.meta.id.startsWith('tt') ? result.meta.id : `${id}`,
+            summary: result.meta.description ?? null,
+            imdbId: result.meta.id?.startsWith('tt') ? result.meta.id : `${id}`,
             type: mediaType,
           },
         ];
-      else {
-        episodes = result.meta.videos.map((item: any): ICinemetaEpisode => ({
-          title: item.title,
-          airDate: item.released || item.firstAired || '',
+      } else {
+        episodes = (result.meta.videos ?? []).map((item: any): ICinemetaEpisode => ({
+          title: item.title ?? null,
+          airDate: item.released ?? item.firstAired ?? null,
           seasonNumber: item.season != null ? Number(item.season) : null,
           seasonEpisodeNumber: item.episode != null ? Number(item.episode) : null,
-          thumbnail: item.thumbnail,
+          thumbnail: item.thumbnail ?? null,
           id: id,
-          imdbId: item.id.startsWith('tt') && item.id.includes(':') ? item.id : `${id}:${item.season}:${item.episode}`,
-          summary: item.overview || '',
+          imdbId:
+            item.id?.startsWith('tt') && item.id.includes(':') ? item.id : `${id}:${item.season ?? 0}:${item.episode ?? 0}`,
+          summary: item.overview ?? null,
           type: mediaType,
         }));
       }
-
       if (mediaType === 'series') {
         const endOfToday = new Date();
         endOfToday.setHours(23, 59, 59, 999);
