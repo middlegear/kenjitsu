@@ -2,8 +2,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { redisGetCache, redisSetCache } from '../../config/redis.js';
 import { Anilist } from '../../providers/meta/anilist.js';
-import { type FastifyQuery, type FastifyParams, IAMetaFormatArr, allowedAnimeProviders } from '../../types/base.js';
-import { Seasons, type IMetaFormat } from '../../types/meta/meta-anime.js';
+import {
+  type FastifyQuery,
+  type FastifyParams,
+  IAMetaFormatArr,
+  allowedAnimeProviders,
+  type IResponse,
+} from '../../types/base.js';
+import { Seasons, type IMetaAnime, type IMetaFormat } from '../../types/meta/meta-anime.js';
 import { Cinemeta } from '../../services/cinemeta-anime.js';
 import { AnimeInfoResolver } from '../../services/anime-resolver.js';
 
@@ -45,40 +51,53 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       }
     },
   );
-  fastify.get(
-    '/anime/:id',
 
-    async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      const id = Number(request.params.id);
-      if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
+  fastify.get('/anime/:id', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
+    const id = Number(request.params.id);
 
-      const cacheKey = `anilist-info-${id}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
+    if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
 
-      try {
-        const result = await anilist.fetchInfo(id, 'ANIME');
-        if (!result || typeof result !== 'object') {
-          return reply.status(502).send({ error: 'Invalid response from AniList' });
-        }
-        if (result.error) {
-          return reply.status(result.status as number).send({ error: result.error });
-        }
-        const isFinished = result.data?.status!.toUpperCase() === 'FINISHED';
-        const duration = isFinished ? 730 : 1;
-        if (result.data) {
-          await redisSetCache(cacheKey, result, duration);
-        }
+    const cacheKey = `anilist-info-${id}`;
+    const cachedData = await redisGetCache<IResponse<IMetaAnime | null>>(cacheKey);
+    if (cachedData) {
+      const isFinished = cachedData.data?.status?.toUpperCase() === 'FINISHED';
+      const duration = isFinished ? 730 : 1;
+      return reply
+        .header('Cache-Control', `public, s-maxage=${duration * 60 * 60}, stale-while-revalidate=300`)
+        .status(200)
+        .send(cachedData);
+    }
+    try {
+      const result = await anilist.fetchInfo(id, 'ANIME');
 
-        return reply
-          .status(200)
-          .send(result)
-          .header('Cache-Control', `public, s-maxage=${duration * 60 * 60}, stale-while-revalidate=300`);
-      } catch (error) {
-        return reply.status(500).send({ error: 'Internal server error' });
+      if (!result || typeof result !== 'object') {
+        return reply.status(502).send({
+          error: 'Invalid response from AniList',
+        });
       }
-    },
-  );
+
+      if (result.error) {
+        return reply.status(result.status as number).send({ error: result.error });
+      }
+
+      const isFinished = result.data?.status?.toUpperCase() === 'FINISHED';
+
+      const duration = isFinished ? 730 : 1;
+
+      if (result.data) {
+        await redisSetCache(cacheKey, result, duration);
+      }
+
+      return reply
+        .header('Cache-Control', `public, s-maxage=${duration * 60 * 60}, stale-while-revalidate=300`)
+        .status(200)
+        .send(result);
+    } catch (error) {
+      return reply.status(500).send({
+        error: error instanceof Error ? error.message : 'Internal server error',
+      });
+    }
+  });
 
   fastify.get(
     '/anime/top/:category',
