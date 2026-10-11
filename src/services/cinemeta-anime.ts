@@ -10,6 +10,14 @@ import type { AnimeInfoResolver } from './anime-resolver.js';
 
 type CinemetaMediaType = 'movie' | 'series';
 
+interface IScheduleNode {
+  episode: number;
+  airingAt: number;
+}
+
+/** AniList id -> upcoming episodes. Plain object so it survives JSON in Redis. */
+type ScheduleMap = Record<string, IScheduleNode[]>;
+
 class Cinemeta extends BaseClass {
   constructor(
     private readonly resolver: AnimeInfoResolver,
@@ -20,8 +28,20 @@ class Cinemeta extends BaseClass {
 
   private static readonly MONTH_ABBR = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
+  private static readonly SCHEDULE_URL =
+    'https://raw.githubusercontent.com/RockinChaos/AniSchedule/master/raw/sub-schedule.json';
+  private static readonly SCHEDULE_CACHE_KEY = 'anischedule-sub-schedule';
+  private static readonly SCHEDULE_TTL_HOURS = 1;
+  private static readonly SCHEDULE_TTL_MS = Cinemeta.SCHEDULE_TTL_HOURS * 60 * 60 * 1000;
+  private static readonly SCHEDULE_BACKOFF_MS = 5 * 60 * 1000;
+
   private readonly baseUrl = 'https://v3-cinemeta.strem.io';
   private readonly mediaTypes: CinemetaMediaType[] = ['movie', 'series'];
+
+  // In-process layer on top of Redis (also the only cache when Redis is disabled)
+  private scheduleMemory: { at: number; data: ScheduleMap } | null = null;
+  private schedulePending: Promise<ScheduleMap> | null = null;
+  private scheduleRetryAt = 0;
 
   /**
    * Maximum acceptable distance, in days, between an anime's releaseDate
@@ -180,6 +200,202 @@ class Cinemeta extends BaseClass {
     return fromStart;
   }
 
+  /**
+   * Loads the AniSchedule "sub" schedule, reduced to { anilistId: nodes }.
+   */
+  private async loadSchedule(): Promise<ScheduleMap> {
+    const memory = this.scheduleMemory;
+
+    if (memory && Date.now() - memory.at < Cinemeta.SCHEDULE_TTL_MS) return memory.data;
+    if (this.schedulePending) return this.schedulePending;
+
+    this.schedulePending = (async (): Promise<ScheduleMap> => {
+      try {
+        const cached = await redisGetCache<ScheduleMap>(Cinemeta.SCHEDULE_CACHE_KEY);
+
+        if (cached) {
+          this.scheduleMemory = { at: Date.now(), data: cached };
+          return cached;
+        }
+
+        // Recently failed: don't hit GitHub again yet
+        if (Date.now() < this.scheduleRetryAt) return this.scheduleMemory?.data ?? {};
+
+        const response = await this.client.fetch(Cinemeta.SCHEDULE_URL, { method: 'GET' });
+
+        if (!response.ok) {
+          this.scheduleRetryAt = Date.now() + Cinemeta.SCHEDULE_BACKOFF_MS;
+          return this.scheduleMemory?.data ?? {};
+        }
+
+        const json = (await response.json()) as any[];
+        const slim: ScheduleMap = {};
+
+        for (const entry of json) {
+          const nodes = entry?.airingSchedule?.nodes;
+
+          if (entry?.id && Array.isArray(nodes) && nodes.length > 0) {
+            slim[String(entry.id)] = nodes.map((node: any) => ({
+              episode: node.episode,
+              airingAt: node.airingAt,
+            }));
+          }
+        }
+
+        this.scheduleMemory = { at: Date.now(), data: slim };
+        await redisSetCache(Cinemeta.SCHEDULE_CACHE_KEY, slim, Cinemeta.SCHEDULE_TTL_HOURS);
+
+        return slim;
+      } catch (error) {
+        console.error('Failed to load airing schedule:', error instanceof Error ? error.message : error);
+        this.scheduleRetryAt = Date.now() + Cinemeta.SCHEDULE_BACKOFF_MS;
+        return this.scheduleMemory?.data ?? {};
+      } finally {
+        this.schedulePending = null;
+      }
+    })();
+
+    return this.schedulePending;
+  }
+
+  /**
+   * Aligns a releasing anime's episode list with what has actually aired,
+   * using AniSchedule as the source of truth.
+   *
+   * AniSchedule lists only upcoming episodes, so the next unaired episode
+   * number minus one is the number of episodes already out.
+   *
+   * - More episodes than that: the excess is cut (Cinemeta placeholders,
+   *   later seasons caught by an open-ended range, etc.).
+   * - Fewer: the aired episodes Cinemeta hasn't caught up on are padded.
+   *   Their airing time comes from the schedule when listed; otherwise it is
+   *   the first scheduled airing stepped back by the schedule's own interval.
+   *
+   * Season/episode numbers continue from the last real Cinemeta episode so
+   * imdbIds line up with Cinemeta's numbering. Anime missing from the
+   * schedule are returned untouched.
+   */
+  private async syncWithSchedule(
+    anilistId: number,
+    anime: IMetaAnime,
+    episodes: ICinemetaEpisode[],
+  ): Promise<ICinemetaEpisode[]> {
+    if (episodes.length === 0) return episodes;
+
+    const nodes = [...((await this.loadSchedule())[String(anilistId)] ?? [])].sort((a, b) => a.episode - b.episode);
+    if (nodes.length === 0) return episodes;
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const total = typeof anime.episodes === 'number' && anime.episodes > 0 ? anime.episodes : Infinity;
+
+    const next = nodes.find(node => node.airingAt > nowSec);
+    const airedCount = Math.min(next ? next.episode - 1 : nodes[nodes.length - 1].episode, total);
+
+    // Cut excess
+    if (episodes.length >= airedCount) return episodes.slice(0, airedCount);
+
+    // Pad aired episodes Cinemeta doesn't have yet
+    const last = episodes[episodes.length - 1];
+    const lastNumber = last.episodeNumber ?? episodes.length;
+
+    const first = nodes[0];
+    const interval = nodes.length > 1 && nodes[1].airingAt > first.airingAt ? nodes[1].airingAt - first.airingAt : 604_800;
+    const airingByEpisode = new Map(nodes.map(node => [node.episode, node.airingAt]));
+
+    const padded: ICinemetaEpisode[] = [];
+
+    for (let ep = lastNumber + 1; ep <= airedCount; ep++) {
+      const airingAt = airingByEpisode.get(ep) ?? first.airingAt - (first.episode - ep) * interval;
+      const seasonEpisodeNumber = last.seasonEpisodeNumber != null ? last.seasonEpisodeNumber + (ep - lastNumber) : null;
+
+      padded.push({
+        ...last,
+        title: `Episode ${ep}`,
+        airDate: new Date(airingAt * 1000).toISOString(),
+        seasonEpisodeNumber,
+        thumbnail: '',
+        imdbId: seasonEpisodeNumber != null ? `${last.id}:${last.seasonNumber}:${seasonEpisodeNumber}` : last.imdbId,
+        summary: '',
+        episodeNumber: ep,
+      });
+    }
+
+    return [...episodes, ...padded];
+  }
+
+  /**
+   * Pads a short episode list up to `targetCount` by cloning the last real
+   * episode and filling in sequential numbers / air dates.
+   * Used for FINISHED titles when Cinemeta is missing later episodes.
+   */
+  private padEpisodes(episodes: ICinemetaEpisode[], targetCount: number): ICinemetaEpisode[] {
+    if (episodes.length === 0 || episodes.length >= targetCount) {
+      return episodes.slice(0, targetCount);
+    }
+
+    const last = episodes[episodes.length - 1];
+    const lastNumber = last.episodeNumber ?? episodes.length;
+
+    const INTERVAL_SEC = 604_800; // not what i expect
+
+    const padded: ICinemetaEpisode[] = [];
+
+    for (let ep = lastNumber + 1; ep <= targetCount; ep++) {
+      const seasonEpisodeNumber = last.seasonEpisodeNumber != null ? last.seasonEpisodeNumber + (ep - lastNumber) : null;
+
+      // Step the air date forward from the last known one
+      const lastAir = this.normalizeDate(last.airDate);
+      const airDate = lastAir
+        ? new Date(lastAir.getTime() + (ep - lastNumber) * INTERVAL_SEC * 1000).toISOString()
+        : last.airDate;
+
+      padded.push({
+        ...last,
+        title: `Episode ${ep}`,
+        airDate,
+        seasonEpisodeNumber,
+        thumbnail: '',
+        imdbId: seasonEpisodeNumber != null ? `${last.id}:${last.seasonNumber}:${seasonEpisodeNumber}` : last.imdbId,
+        summary: '',
+        episodeNumber: ep,
+      });
+    }
+
+    return [...episodes, ...padded];
+  }
+
+  /**
+   * Final validation of the resolved episode list.
+   *
+   * FINISHED: pad up to AniList's reported count when Cinemeta is short;
+   *           still reject when we somehow have *more* episodes than reported.
+   * Anything else (releasing, hiatus…): synced against AniSchedule.
+   */
+  private async finalizeEpisodes(
+    anilistId: number,
+    anime: IMetaAnime,
+    episodes: ICinemetaEpisode[],
+  ): Promise<IResponse<ICinemetaEpisode[] | []>> {
+    if (anime.status?.toUpperCase() === 'FINISHED') {
+      const expected = anime.episodes;
+
+      if (typeof expected === 'number' && expected > 0) {
+        if (episodes.length > expected) {
+          // Truncate excess (shouldn't normally happen after resolveEpisodeRange)
+          return { data: episodes.slice(0, expected) };
+        }
+        if (episodes.length < expected) {
+          // Cinemeta missing data → pad using the last real episode as template
+          return { data: this.padEpisodes(episodes, expected) };
+        }
+      }
+
+      return { data: episodes };
+    }
+
+    return { data: await this.syncWithSchedule(anilistId, anime, episodes) };
+  }
+
   private async fetchCatalog(query: string, mediaType: CinemetaMediaType): Promise<IResponse<ICineMetaSearch[]>> {
     try {
       const response = await this.client.fetch(`${this.baseUrl}/catalog/${mediaType}/top/search=${query}.json`, {
@@ -250,8 +466,9 @@ class Cinemeta extends BaseClass {
 
   /**
    * Titles to search Cinemeta with, in order: the preferred title
-   * (english, then english synonym, ...), then romaji as a fallback.
-   * Deduped so a missing english title doesn't search romaji twice.
+   * (english, then english synonym, ...), then romaji, then latin-only
+   * synonyms. Deduped, and capped because each query costs two requests
+   * (movie + series catalogs) on a cache miss.
    */
   private extractSearchQueries(media: IMetaAnime, maxQueries = 5): string[] {
     const candidates = [
@@ -556,31 +773,25 @@ class Cinemeta extends BaseClass {
 
       const kitsuIdNumber = kitsuId.data?.kitsuId ? Number(kitsuId.data.kitsuId) : null;
 
+      // Numbers episodes 1..n and attaches the Kitsu id
+      const withIds = (episodes: ICinemetaEpisode[]) =>
+        episodes.map((ep, index) => ({
+          ...ep,
+          episodeNumber: index + 1,
+          kitsuId: kitsuIdNumber,
+        }));
+
       if (format === 'movie') {
-        return {
-          data: episodeList.data.map((ep, index) => ({
-            ...ep,
-            episodeNumber: index + 1,
-            kitsuId: kitsuIdNumber,
-          })),
-        };
+        return { data: withIds(episodeList.data as ICinemetaEpisode[]) };
       }
 
       if (episodeList.data.length === 1) {
-        return {
-          data: episodeList.data as ICinemetaEpisode[],
-        };
+        return this.finalizeEpisodes(anilistId, animeData, withIds(episodeList.data as ICinemetaEpisode[]));
       }
 
       const startDate = this.normalizeDate(animeData.releaseDate);
 
-      const narrowedEpisodes = this.resolveEpisodeRange(animeData, episodeList.data as ICinemetaEpisode[]).map(
-        (ep, index) => ({
-          ...ep,
-          episodeNumber: index + 1,
-          kitsuId: kitsuIdNumber,
-        }),
-      );
+      const narrowedEpisodes = withIds(this.resolveEpisodeRange(animeData, episodeList.data as ICinemetaEpisode[]));
 
       if (narrowedEpisodes.length === 0) {
         return {
@@ -592,9 +803,7 @@ class Cinemeta extends BaseClass {
         };
       }
 
-      return {
-        data: narrowedEpisodes,
-      };
+      return this.finalizeEpisodes(anilistId, animeData, narrowedEpisodes);
     } catch (error) {
       return {
         data: [],
