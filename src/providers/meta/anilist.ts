@@ -3,7 +3,6 @@ import type {
   AiringSchedule,
   IAnilistCharacters,
   IMetaAnime,
-  IMetaAnimeEpisode,
   IMetaAnimePaginated,
   IMetaFormat,
   IMetaProviderIdResponse,
@@ -34,6 +33,7 @@ import { AnimeHeaven } from '../anime/animeheaven.js';
 import { findBestMatch } from '../../utils/libs.js';
 import { BaseClass } from '../models/base.js';
 import { Anikoto } from '../anime/anikoto.js';
+import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
 /**
  * A class for interacting with the Anilist API to search for anime, fetch detailed information,
@@ -145,7 +145,7 @@ export class Anilist extends BaseClass {
     }
 
     try {
-      const anilist = await this.resolveAnimeInfo(anilistId);
+      const anilist = await this.fetchInfo(anilistId, 'ANIME');
 
       if (anilist.error || !anilist.data) {
         return {
@@ -236,7 +236,7 @@ export class Anilist extends BaseClass {
     }
 
     try {
-      const anilist = await this.resolveAnimeInfo(anilistId);
+      const anilist = await this.fetchInfo(anilistId, 'ANIME');
       if (!anilist.data) {
         return {
           error: anilist.error,
@@ -245,7 +245,7 @@ export class Anilist extends BaseClass {
           status: anilist.status,
         };
       }
-      const rootShow = await this.resolveFranchiseMedia(anilistId);
+      const rootShow = await this.fetchParentSeries(anilistId);
       const titleObject = rootShow.data[0].title;
       const searchQueries = [anilist.data.title.romaji, titleObject.romaji, titleObject.english, anilist.data.title.english]
         .filter((title): title is string => Boolean(title))
@@ -328,7 +328,7 @@ export class Anilist extends BaseClass {
     }
 
     try {
-      const anilist = await this.resolveAnimeInfo(anilistId);
+      const anilist = await this.fetchInfo(anilistId, 'ANIME');
 
       if (anilist.error || !anilist.data) {
         return {
@@ -408,6 +408,9 @@ export class Anilist extends BaseClass {
         status: 400,
       };
     }
+    const cacheKey = `anilist-search-${search}-${mediaType}-${page}-${perPage}`;
+    const cached = await redisGetCache<IMetaAnimePaginated<IMetaAnime[] | []>>(cacheKey);
+    if (cached) return cached;
 
     try {
       const variables = { search, page, perPage, type: mediaType, isAdult: false };
@@ -495,13 +498,19 @@ export class Anilist extends BaseClass {
       if (mediaType === 'MANGA') {
         items = res.filter(item => item.format !== null && item.format === 'MANGA');
       }
-      return {
+
+      const finalResult: IMetaAnimePaginated<IMetaAnime[] | []> = {
         hasNextPage: pagination.hasNextPage,
         currentPage: pagination.currentPage,
         lastPage: pagination.lastPage,
         perPage: pagination.perPage,
         data: items,
       };
+      if (Array.isArray(items) && items.length > 0) {
+        await redisSetCache<IMetaAnimePaginated<IMetaAnime[] | []>>(cacheKey, finalResult, 168);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,
@@ -537,6 +546,10 @@ export class Anilist extends BaseClass {
       query: fetchByIdQuery,
       variables,
     };
+    const cacheKey = `anilist-mediainfo-${id}-${mediaType}`;
+    const cached = await redisGetCache<IResponse<IMetaAnime | null>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const response = await this.client.fetch(
         this.baseUrl,
@@ -620,9 +633,17 @@ export class Anilist extends BaseClass {
         producers: result.data.Media.studios.nodes.map((item2: any) => item2.name),
       };
 
-      return {
-        data: res as IMetaAnime,
+      const finalResult = {
+        data: res,
       };
+
+      const isFinished = res.status?.toUpperCase() === 'FINISHED';
+      const duration = isFinished ? 730 : 1;
+      if (res) {
+        await redisSetCache<IResponse<IMetaAnime | null>>(cacheKey, finalResult, duration);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown Err',
@@ -649,6 +670,9 @@ export class Anilist extends BaseClass {
     status: 'NOT_YET_RELEASED' | 'RELEASING' = 'NOT_YET_RELEASED',
     format: IMetaFormat = 'TV',
   ): Promise<IMetaAnimePaginated<IMetaAnime[] | []>> {
+    const cacheKey = `anilist-top-${page}-${perPage}-${sort}-${status}-${format}`;
+    const cached = await redisGetCache<IMetaAnimePaginated<IMetaAnime[] | []>>(cacheKey);
+    if (cached) return cached;
     try {
       const variables = { page, perPage, type: 'ANIME', format, status, isAdult: false, sort };
 
@@ -718,13 +742,17 @@ export class Anilist extends BaseClass {
         producers: item.studios.nodes.map((item2: any) => item2.name),
       }));
 
-      return {
+      const finalResult = {
         hasNextPage: pagination.hasNextPage,
         currentPage: pagination.currentPage,
         lastPage: pagination.lastPage,
         perPage: pagination.perPage,
-        data: res as IMetaAnime[],
+        data: res,
       };
+      if (Array.isArray(res) && res.length > 0) {
+        await redisSetCache<IMetaAnimePaginated<IMetaAnime[] | []>>(cacheKey, finalResult, 168);
+      }
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,
@@ -776,6 +804,10 @@ export class Anilist extends BaseClass {
     perPage: number = 20,
     sort: 'SCORE_DESC' | 'POPULARITY_DESC' = 'POPULARITY_DESC',
   ): Promise<IMetaAnimePaginated<IMetaAnime[] | []>> {
+    const cacheKey = `anilist-popular-${mediaType}-${format}-${page}-${perPage}-${sort}`;
+    const cached = await redisGetCache<IMetaAnimePaginated<IMetaAnime[] | []>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const variables = { page, perPage, type: mediaType, format, isAdult: false, sort };
 
@@ -857,13 +889,18 @@ export class Anilist extends BaseClass {
         producers: item.studios.nodes.map((item2: any) => item2.name),
       }));
 
-      return {
+      const finalResult = {
         hasNextPage: pagination.hasNextPage,
         currentPage: pagination.currentPage,
         lastPage: pagination.lastPage,
         perPage: pagination.perPage,
         data: res,
       };
+
+      if (Array.isArray(res) && res.length > 0) {
+        await redisSetCache<IMetaAnimePaginated<IMetaAnime[] | []>>(cacheKey, finalResult, 168);
+      }
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown err',
@@ -930,6 +967,10 @@ export class Anilist extends BaseClass {
         status: 400,
       };
     }
+
+    const cacheKey = `anilist-seasons-${season}-${seasonYear}-${page}-${perPage}-${format}`;
+    const cached = await redisGetCache<IMetaAnimePaginated<IMetaAnime[] | []>>(cacheKey);
+    if (cached) return cached;
 
     try {
       const variables = {
@@ -1021,13 +1062,19 @@ export class Anilist extends BaseClass {
         producers: item.studios.nodes.map((item2: any) => item2.name),
       }));
 
-      return {
+      const finalResult = {
         hasNextPage: pagination.hasNextPage,
         currentPage: pagination.currentPage,
         lastPage: pagination.lastPage,
         perPage: pagination.perPage,
         data: res,
       };
+
+      if (Array.isArray(res) && res.length > 0) {
+        await redisSetCache<IMetaAnimePaginated<IMetaAnime[] | []>>(cacheKey, finalResult, 336);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,
@@ -1067,6 +1114,10 @@ export class Anilist extends BaseClass {
       type: mediaType,
       format,
     };
+
+    const cacheKey = `anilist-trending-${mediaType}-${format}-${page}-${perPage}`;
+    const cached = await redisGetCache<IMetaAnimePaginated<IMetaAnime[] | []>>(cacheKey);
+    if (cached) return cached;
 
     try {
       const payload = {
@@ -1142,13 +1193,18 @@ export class Anilist extends BaseClass {
         producers: item.studios?.nodes.map((item2: any) => item2.name),
       }));
 
-      return {
+      const finalResult = {
         hasNextPage: pagination.hasNextPage,
         currentPage: pagination.currentPage,
         lastPage: pagination.lastPage,
         perPage: pagination.perPage,
         data: res,
       };
+
+      if (Array.isArray(res) && res.length > 0) {
+        await redisSetCache<IMetaAnimePaginated<IMetaAnime[] | []>>(cacheKey, finalResult, 24);
+      }
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,
@@ -1166,7 +1222,7 @@ export class Anilist extends BaseClass {
    * prequels, or spin-offs.
    *
    * @param mediaId - The unique Anilist anime ID (required)
-   * @returns Promise that resolves to related anime information
+   * @returns Promise that resolves to franchise anime information
    */
   async fetchParentSeries(mediaId: number): Promise<IResponse<IRelatedAnimeData[] | []>> {
     const TIMELINE_RELATIONS = new Set(['PREQUEL', 'SEQUEL', 'PARENT']);
@@ -1176,6 +1232,10 @@ export class Anilist extends BaseClass {
 
     let rootMedia: any = null;
     let rootEdges: any[] = [];
+
+    const cacheKey = `anilist-franchise-${mediaId}`;
+    const cached = await redisGetCache<IResponse<IRelatedAnimeData[] | []>>(cacheKey);
+    if (cached) return cached;
 
     try {
       // Walk backwards through PREQUEL relations to find the oldest/root entry.
@@ -1304,9 +1364,14 @@ export class Anilist extends BaseClass {
         };
       }
 
-      return {
+      const finalResult = {
         data: res,
       };
+
+      if (Array.isArray(res) && res.length > 0) {
+        await redisSetCache<IResponse<IRelatedAnimeData[] | []>>(cacheKey, finalResult, 0);
+      }
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown Error',
@@ -1336,6 +1401,10 @@ export class Anilist extends BaseClass {
       mediaId,
       type: 'ANIME',
     };
+
+    const cacheKey = `anilist-releated-media-${mediaId}`;
+    const cached = await redisGetCache<IResponse<IRelatedAnimeData[] | []>>(cacheKey);
+    if (cached) return cached;
 
     try {
       const payload = {
@@ -1392,9 +1461,14 @@ export class Anilist extends BaseClass {
           color: item.node.coverImage.color ?? null,
         }));
 
-      return {
+      const finalResult = {
         data: res,
       };
+
+      if (Array.isArray(res) && res.length > 0) {
+        await redisSetCache<IResponse<IRelatedAnimeData[] | []>>(cacheKey, finalResult, 720);
+      }
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown Error',
@@ -1418,7 +1492,9 @@ export class Anilist extends BaseClass {
         status: 400,
       };
     }
-
+    const cacheKey = `anilist-characters-${mediaId}`;
+    const cached = await redisGetCache<IResponse<IAnilistCharacters | null>>(cacheKey);
+    if (cached) return cached;
     try {
       const variables = {
         mediaId,
@@ -1471,9 +1547,14 @@ export class Anilist extends BaseClass {
         })),
       };
 
-      return {
+      const finalResult = {
         data: res,
       };
+      if (Array.isArray(res) && res.length > 0) {
+        await redisSetCache<IResponse<IAnilistCharacters | null>>(cacheKey, finalResult, 720);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown err',
@@ -1493,6 +1574,10 @@ export class Anilist extends BaseClass {
     if (!mediaId) {
       return { error: 'Missing required params: anilistId', data: null, status: 400 };
     }
+
+    const cacheKey = `anilist-schedule-${mediaId}`;
+    const cached = await redisGetCache<IResponse<MediaSchedule | null>>(cacheKey);
+    if (cached) return cached;
     try {
       const variables = {
         mediaId,
@@ -1571,7 +1656,12 @@ export class Anilist extends BaseClass {
           : null,
       };
 
-      return { data: res as MediaSchedule };
+      const finalResult = { data: res };
+      if (res) {
+        await redisSetCache<IResponse<MediaSchedule | null>>(cacheKey, finalResult, 12);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown err',
@@ -1593,6 +1683,9 @@ export class Anilist extends BaseClass {
     page: number = 1,
     perPage: number = 20,
   ): Promise<IMetaAnimePaginated<AiringSchedule[] | []>> {
+    const cachekey = `anilist-airing-schedule-${date}`;
+    const cached = await redisGetCache<IMetaAnimePaginated<AiringSchedule[] | []>>(cachekey);
+    if (cached) return cached;
     try {
       const start = this.getAniListVariables(date).start;
       const end = this.getAniListVariables(date).end;
@@ -1625,7 +1718,6 @@ export class Anilist extends BaseClass {
           currentPage: 0,
           lastPage: 0,
           perPage: 0,
-
           error: response.statusText || 'Server returned an empty response',
           data: [],
           status: response.status,
@@ -1685,13 +1777,19 @@ export class Anilist extends BaseClass {
             }
           : null,
       }));
-      return {
+      const finalResult = {
         hasNextPage: result.data.Page.pageInfo.hasNextPage,
         currentPage: result.data.Page.pageInfo.currentPage,
         lastPage: result.data.Page.pageInfo.lastPage,
         perPage: result.data.Page.pageInfo.perPage,
         data: res,
       };
+
+      if (Array.isArray(res) && res.length > 0) {
+        await redisSetCache<IMetaAnimePaginated<AiringSchedule[] | []>>(cachekey, finalResult, 12);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,
@@ -1703,72 +1801,6 @@ export class Anilist extends BaseClass {
         status: 500,
       };
     }
-  }
-
-  private async resolveAnimeInfo(anilistId: number): Promise<IResponse<IMetaAnime | null>> {
-    const anilistResult = await this.fetchInfo(anilistId, 'ANIME');
-
-    if (!anilistResult.error && anilistResult.data) {
-      return { data: anilistResult.data, status: 200 };
-    }
-
-    const RETRYABLE_STATUSES = [403, 429];
-    const canFallback = anilistResult.status !== undefined && RETRYABLE_STATUSES.includes(anilistResult.status);
-
-    if (!canFallback) {
-      return { data: null, error: anilistResult.error, status: anilistResult.status };
-    }
-
-    const mappedId = await new Kitsu().fetchMapping(anilistId);
-    if (mappedId.error || !mappedId.data?.id) {
-      return {
-        data: null,
-        error: mappedId.error ?? 'Could not map anilist id to a kitsu id',
-        status: mappedId.status ?? 404,
-      };
-    }
-
-    const kitsuAnimeId = Number(mappedId.data.id);
-    if (Number.isNaN(kitsuAnimeId)) {
-      return { data: null, error: 'Invalid kitsu id returned from mapping', status: 500 };
-    }
-
-    const kitsuResult = await new Kitsu().fetchInfo(kitsuAnimeId);
-    if (kitsuResult.error || !kitsuResult.data) {
-      return {
-        data: null,
-        error: kitsuResult.error ?? 'Kitsu fallback failed',
-        status: kitsuResult.status ?? 500,
-      };
-    }
-
-    return { data: kitsuResult.data };
-  }
-  private async resolveFranchiseMedia(anilistId: number): Promise<IResponse<IRelatedAnimeData[] | []>> {
-    const mappedId = await new Kitsu().fetchMapping(anilistId);
-    if (mappedId.error || !mappedId.data?.id) {
-      return {
-        data: [],
-        error: mappedId.error ?? 'Could not map anilist id to a kitsu id',
-        status: mappedId.status ?? 404,
-      };
-    }
-
-    const kitsuAnimeId = mappedId.data.id as string;
-    if (Number.isNaN(kitsuAnimeId)) {
-      return { data: [], error: 'Invalid kitsu id returned from mapping', status: 500 };
-    }
-
-    const kitsuResult = await new Kitsu().fetchParentSeries(kitsuAnimeId);
-    if (kitsuResult.error || !kitsuResult.data) {
-      return {
-        data: [],
-        error: kitsuResult.error ?? 'Kitsu fallback failed',
-        status: kitsuResult.status ?? 500,
-      };
-    }
-
-    return { data: kitsuResult.data };
   }
 
   /**

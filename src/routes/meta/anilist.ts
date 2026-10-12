@@ -1,72 +1,43 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-
-import { redisGetCache, redisSetCache } from '../../config/redis.js';
 import { Anilist } from '../../providers/meta/anilist.js';
-import {
-  type FastifyQuery,
-  type FastifyParams,
-  IAMetaFormatArr,
-  allowedAnimeProviders,
-  type IResponse,
-} from '../../types/base.js';
-import { Seasons, type IMetaAnime, type IMetaFormat } from '../../types/meta/meta-anime.js';
+import { allowedAnimeProviders, type FastifyParams, type FastifyQuery, IAMetaFormatArr } from '../../types/base.js';
+import { type IMetaFormat, Seasons } from '../../types/meta/meta-anime.js';
 import { Cinemeta } from '../../services/cinemeta-anime.js';
 import { AnimeInfoResolver } from '../../services/anime-resolver.js';
 
 const anilist = new Anilist();
 
 export default async function AnilistRoutes(fastify: FastifyInstance) {
-  fastify.get(
-    '/anime/search',
+  fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
+    const { q, page = 1 } = request.query;
+    if (!q) return reply.status(400).send({ error: "Missing 'q' parameter" });
+    if (q.length > 1000) return reply.status(400).send({ error: 'Query too long' });
 
-    async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
-      const { q, page = 1 } = request.query;
-      if (!q) return reply.status(400).send({ error: "Missing 'q' parameter" });
-      if (q.length > 1000) return reply.status(400).send({ error: 'Query too long' });
+    let perPage = Math.min(Number(request.query.perPage) || 20, 50);
 
-      let perPage = Math.min(Number(request.query.perPage) || 20, 50);
-      const cacheKey = `anilist-search-${q}-${page}-${perPage}`;
-
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
-
-      try {
-        const result = await anilist.search(q, 'ANIME', page, perPage);
-        if (!result || typeof result !== 'object') {
-          return reply.status(502).send({ error: 'Invalid response from AniList' });
-        }
-        if (result.error) {
-          return reply.status(result.status as number).send({ error: result.error });
-        }
-
-        if (result?.data?.length > 0) {
-          await redisSetCache(cacheKey, result, 168);
-        }
-        return reply
-          .status(200)
-          .send(result)
-          .header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
-      } catch (error) {
-        return reply.status(500).send({ error: 'Internal server error' });
+    try {
+      const result = await anilist.search(q, 'ANIME', page, perPage);
+      if (!result || typeof result !== 'object') {
+        return reply.status(502).send({ error: 'Invalid response from AniList' });
       }
-    },
-  );
+      if (result.error) {
+        return reply.status(result.status as number).send({ error: result.error });
+      }
+
+      return reply
+        .header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`)
+        .status(200)
+        .send(result);
+    } catch (error) {
+      return reply.status(500).send({ error: 'Internal server error' });
+    }
+  });
 
   fastify.get('/anime/:id', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
     const id = Number(request.params.id);
 
     if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
 
-    const cacheKey = `anilist-info-${id}`;
-    const cachedData = await redisGetCache<IResponse<IMetaAnime | null>>(cacheKey);
-    if (cachedData) {
-      const isFinished = cachedData.data?.status?.toUpperCase() === 'FINISHED';
-      const duration = isFinished ? 730 : 1;
-      return reply
-        .header('Cache-Control', `public, s-maxage=${duration * 60 * 60}, stale-while-revalidate=300`)
-        .status(200)
-        .send(cachedData);
-    }
     try {
       const result = await anilist.fetchInfo(id, 'ANIME');
 
@@ -84,10 +55,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
 
       const duration = isFinished ? 730 : 1;
 
-      if (result.data) {
-        await redisSetCache(cacheKey, result, duration);
-      }
-
       return reply
         .header('Cache-Control', `public, s-maxage=${duration * 60 * 60}, stale-while-revalidate=300`)
         .status(200)
@@ -103,8 +70,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     '/anime/top/:category',
 
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
-
       const page = Number(request.query.page) || 1;
       let perPage = Math.min(Number(request.query.perPage) || 20, 50);
       const category = request.params.category as 'airing' | 'trending' | 'upcoming' | 'popular' | 'rating';
@@ -112,10 +77,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       if (!['airing', 'trending', 'upcoming', 'popular', 'rating'].includes(category)) {
         return reply.status(400).send({ error: `Invalid category: ${category}` });
       }
-
-      const cacheKey = `anilist-top-${category}-${page}-${perPage}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
 
       try {
         let result;
@@ -145,10 +106,11 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         }
 
         const duration = ['airing', 'trending', 'upcoming'].includes(category) ? 24 : 336;
-        if (result?.data?.length > 0) {
-          await redisSetCache(cacheKey, result, duration);
-        }
-        return reply.status(200).send(result);
+
+        return reply
+          .header('Cache-Control', `public, s-maxage=${duration * 60 * 60}, stale-while-revalidate=300`)
+          .status(200)
+          .send(result);
       } catch (error) {
         return reply.status(500).send({ error: 'Internal server error' });
       }
@@ -159,14 +121,8 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     '/anime/:id/characters',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
-
       const id = Number(request.params.id);
       if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
-
-      const cacheKey = `anilist-characters-${id}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
 
       try {
         const result = await anilist.fetchCharacters(id);
@@ -177,10 +133,10 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
 
-        if (result.data) {
-          await redisSetCache(cacheKey, result, 0);
-        }
-        return reply.status(200).send(result);
+        return reply
+          .header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`)
+          .status(200)
+          .send(result);
       } catch (error) {
         return reply.status(500).send({ error: 'Internal server error' });
       }
@@ -191,14 +147,8 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     '/anime/:id/related',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
-
       const id = Number(request.params.id);
       if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
-
-      const cacheKey = `anilist-related-${id}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
 
       try {
         const result = await anilist.fetchRelatedAnime(id);
@@ -209,10 +159,10 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
 
-        if (result?.data?.length > 0) {
-          await redisSetCache(cacheKey, result, 336);
-        }
-        return reply.status(200).send(result);
+        return reply
+          .header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`)
+          .status(200)
+          .send(result);
       } catch (error) {
         return reply.status(500).send({ error: 'Internal server error' });
       }
@@ -221,10 +171,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/:id/episodes', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
     const id = request.params.id;
     if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
-
-    const cacheKey = `anilist-episodes-${id}`;
-    const cachedData = await redisGetCache(cacheKey);
-    if (cachedData) return reply.status(200).send(cachedData);
 
     try {
       const result = await new Cinemeta(new AnimeInfoResolver()).fetchAnimeEpisode(Number(id));
@@ -235,24 +181,20 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         return reply.status(result.status as number).send({ error: result.error });
       }
 
-      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-        await redisSetCache(cacheKey, result, 1);
-      }
-      return reply.status(200).send(result);
+      return (
+        reply
+          // .header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`) would disable caching this for  now
+          .status(200)
+          .send(result)
+      );
     } catch (error) {
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
 
   fastify.get('/anime/:id/franchise', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-    reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
-
     const id = request.params.id;
     if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
-
-    const cacheKey = `anilist-franchise-${id}`;
-    const cachedData = await redisGetCache(cacheKey);
-    if (cachedData) return reply.status(200).send(cachedData);
 
     try {
       const result = await anilist.fetchParentSeries(Number(id));
@@ -263,20 +205,18 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         return reply.status(result.status as number).send({ error: result.error });
       }
 
-      if (result?.data?.length > 0) {
-        await redisSetCache(cacheKey, result, 336);
-      }
-      return reply.status(200).send(result);
+      return reply
+        .header('Cache-Control', `public, s-maxage=${720 * 60 * 60}, stale-while-revalidate=300`)
+        .status(200)
+        .send(result);
     } catch (error) {
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
   fastify.get(
-    '/airing/date/:date',
+    'anime/:date/airingschedule',
 
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`);
-
       const page = Number(request.query.page) || 1;
       const perPage = Number(request.query.perPage) || 20;
       const date = request.params.date;
@@ -284,20 +224,16 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       if (!date) return reply.status(400).send({ error: "Missing 'date' parameter" });
       if (!isValidDate(date)) return reply.status(400).send({ error: 'Invalid date format. Expected YYYY-MM-DD' });
 
-      const cacheKey = `anilist-schedule-${date}-${page}-${perPage}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
-
       try {
         const result = await anilist.fetchAiringSchedule(date, page, perPage);
         if (result.error) {
           return reply.status(result.status as number).send(result);
         }
 
-        if (result?.data?.length > 0) {
-          await redisSetCache(cacheKey, result, 6);
-        }
-        return reply.status(200).send(result);
+        return reply
+          .header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`)
+          .status(200)
+          .send(result);
       } catch (error) {
         return reply.status(500).send({ error: 'Internal server error' });
       }
@@ -308,14 +244,8 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     '/anime/:id/schedule',
 
     async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`);
-
       const id = Number(request.params.id);
       if (isNaN(id) || !id) return reply.status(400).send({ error: "Missing or invalid 'id' parameter" });
-
-      const cacheKey = `anilist-media-schedule-${id}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
 
       try {
         const result = await anilist.fetchMediaSchedule(id);
@@ -326,10 +256,10 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
 
-        if (result.data) {
-          await redisSetCache(cacheKey, result, 24);
-        }
-        return reply.status(200).send(result);
+        return reply
+          .header('Cache-Control', `public, s-maxage=${12 * 60 * 60}, stale-while-revalidate=300`)
+          .status(200)
+          .send(result);
       } catch (error) {
         return reply.status(500).send({ error: 'Internal server error' });
       }
@@ -338,8 +268,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/seasons/:season/:year',
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`);
-
       const season = request.params.season as Seasons;
       const year = Number(request.params.year);
       const format = (request.query.format as IMetaFormat) || 'TV';
@@ -356,10 +284,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: `Invalid season: ${season}` });
       }
 
-      const cacheKey = `anilist-season-${season}-${year}-${page}-${format}-${perPage}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
-
       try {
         const result = await anilist.fetchSeasonalAnime(season, year, page, perPage, format);
         if (!result || typeof result !== 'object') {
@@ -369,10 +293,10 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           return reply.status(result.status as number).send({ error: result.error });
         }
 
-        if (result?.data?.length > 0) {
-          await redisSetCache(cacheKey, result, 336);
-        }
-        return reply.status(200).send(result);
+        return reply
+          .header('Cache-Control', `public, s-maxage=${720 * 60 * 60}, stale-while-revalidate=300`)
+          .status(200)
+          .send(result);
       } catch (error) {
         return reply.status(500).send({ error: 'Internal server error' });
       }
@@ -381,8 +305,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/anime/:id/mappings',
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
-      reply.header('Cache-Control', `public, s-maxage=${24 * 60 * 60}, stale-while-revalidate=300`);
-
       const id = Number(request.params.id);
       const provider = request.query.provider as 'anikoto' | 'anizone' | 'animeheaven' | 'kitsu';
 
@@ -392,10 +314,6 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       if (!allowedAnimeProviders.includes(provider)) {
         return reply.status(400).send({ error: `Invalid provider '${provider}'` });
       }
-
-      const cacheKey = `anilist-mappings-id-${id}-${provider}`;
-      const cachedData = await redisGetCache(cacheKey);
-      if (cachedData) return reply.status(200).send(cachedData);
 
       try {
         let result;
@@ -425,11 +343,10 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
           return reply.status((result.status as number) || 500).send({ error: result.error });
         }
 
-        const data = result?.data;
-        if (result && data && result.provider !== null) {
-          await redisSetCache(cacheKey, result, 168);
-        }
-        return reply.status(200).send(result);
+        return reply
+          .header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`)
+          .status(200)
+          .send(result);
       } catch (error) {
         return reply.status(500).send({ error: 'Internal server error' });
       }

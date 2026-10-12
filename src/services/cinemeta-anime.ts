@@ -640,12 +640,25 @@ class Cinemeta extends BaseClass {
     const cached = await redisGetCache<IResponse<ICineMetaSearch[] | []>>(cacheKey);
     if (cached) return cached;
 
-    const results = await Promise.all(
+    const settledResults = await Promise.allSettled(
       this.mediaTypes.map(mediaType => this.fetchCatalog(encodeURIComponent(query), mediaType)),
     );
-    const failed = results.filter(r => r.error);
 
-    // Both failed -> surface the error
+    const results = settledResults.map(result => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      }
+
+      return {
+        data: [],
+        error: result.reason instanceof Error ? result.reason.message : 'Failed to fetch catalog',
+        status: 500,
+      };
+    });
+
+    const failed = results.filter(result => result.error);
+
+    // All requests failed -> surface the first error
     if (failed.length === results.length) {
       return {
         data: [],
@@ -655,9 +668,10 @@ class Cinemeta extends BaseClass {
     }
 
     const responseResult: IResponse<ICineMetaSearch[]> = {
-      data: this.mergeResults(results.map(r => r.data)),
+      data: this.mergeResults(results.map(result => result.data)),
     };
 
+    // Cache only when every request succeeded and results are non-empty
     if (responseResult.data.length > 0 && failed.length === 0) {
       await redisSetCache(cacheKey, responseResult, 72);
     }
