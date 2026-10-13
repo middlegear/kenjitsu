@@ -8,6 +8,7 @@ import type {
   IMovieInfo,
 } from '../../types/meta/meta-movie.js';
 import { BaseClass, type ClientConfig } from '../models/base.js';
+import { redisGetCache, redisSetCache } from '../../config/redis.js';
 
 /**
  * A class for interacting with The Movie Database (TMDb) API to search for and retrieve
@@ -15,7 +16,7 @@ import { BaseClass, type ClientConfig } from '../models/base.js';
  * episode information, and streaming source integration with external providers.
  */
 export class TheMovieDatabase extends BaseClass {
-  private readonly apiKey: string = 'ea021b3b0775c8531592713ab727f254';
+  private readonly apiKey: string = process.env.TMDB_API_KEY ?? 'ea021b3b0775c8531592713ab727f254';
 
   /** Base URL for the TMDb API */
   private readonly baseUrl: string = 'https://api.themoviedb.org/3';
@@ -52,12 +53,16 @@ export class TheMovieDatabase extends BaseClass {
       };
     }
 
-    return this.fetchPaginatedData('/search/tv', {
-      include_adult: 'false',
-      page: String(page),
-      query,
-      ...(year !== undefined && { first_air_date_year: String(year) }),
-    });
+    return this.fetchPaginatedData(
+      '/search/tv',
+      {
+        include_adult: 'false',
+        page: String(page),
+        query: query.trim().toLowerCase(),
+        ...(year !== undefined && { first_air_date_year: String(year) }),
+      },
+      168,
+    );
   }
   /**
    * Fetches detailed TV show information from TMDb using append_to_response
@@ -70,6 +75,10 @@ export class TheMovieDatabase extends BaseClass {
         status: 400,
       };
     }
+
+    const cacheKey = `tmdb-show-${tmdbId}`;
+    const cached = await redisGetCache<IResponse<IAnimeListItem | null>>(cacheKey);
+    if (cached) return cached;
 
     try {
       const params = new URLSearchParams({
@@ -141,7 +150,13 @@ export class TheMovieDatabase extends BaseClass {
         },
       };
 
-      return { data: data as IAnimeListItem };
+      const finalResult = { data: data };
+
+      if (data && data !== null) {
+        await redisSetCache<IResponse<IAnimeListItem | null>>(cacheKey, finalResult, 24);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         data: null,
@@ -162,6 +177,10 @@ export class TheMovieDatabase extends BaseClass {
     if (!tmdbId) {
       return { error: 'Missing required params: tmdbId!', data: [], status: 400 };
     }
+
+    const cacheKey = `tmdb-episodes-${tmdbId}-${season}`;
+    const cached = await redisGetCache<IResponse<IMetaMovieEpisodes[] | []>>(cacheKey);
+    if (cached) return cached;
 
     try {
       const queryString = new URLSearchParams({
@@ -191,7 +210,13 @@ export class TheMovieDatabase extends BaseClass {
         images: item.still_path ? `https://image.tmdb.org/t/p/w1280${item.still_path}` : null,
       }));
 
-      return { data: episodes as IMetaMovieEpisodes[] };
+      const finalResult = { data: episodes };
+
+      if (Array.isArray(episodes) && episodes.length > 0) {
+        await redisSetCache<IResponse<IMetaMovieEpisodes[] | []>>(cacheKey, finalResult, 12);
+      }
+
+      return finalResult;
     } catch (error) {
       return { error: error instanceof Error ? error.message : 'Unknown error', data: [], status: 500 };
     }
@@ -210,6 +235,10 @@ export class TheMovieDatabase extends BaseClass {
     season: number,
     episodeNumber: number,
   ): Promise<IResponse<IMetaMovieEpisodes | null>> {
+    const cacheKey = `tmdb-episode-${tmdbId}-${season}-${episodeNumber}`;
+    const cached = await redisGetCache<IResponse<IMetaMovieEpisodes | null>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const queryString = new URLSearchParams({
         api_key: this.apiKey,
@@ -239,9 +268,15 @@ export class TheMovieDatabase extends BaseClass {
         thumbnail: result.still_path ? `https://image.tmdb.org/t/p/w1280${result.still_path}` : null,
       };
 
-      return {
-        data: episode as IMetaMovieEpisodes,
+      const finalResult = {
+        data: episode,
       };
+
+      if (episode && episode !== null) {
+        await redisSetCache<IResponse<IMetaMovieEpisodes | null>>(cacheKey, finalResult, 12);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -262,7 +297,7 @@ export class TheMovieDatabase extends BaseClass {
     timeWindow: 'day' | 'week' = 'week',
     page: number = 1,
   ): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
-    return this.fetchPaginatedData(`/trending/tv/${timeWindow}`, { page: String(page) });
+    return this.fetchPaginatedData(`/trending/tv/${timeWindow}`, { page: String(page) }, timeWindow === 'day' ? 6 : 24);
   }
 
   /**
@@ -272,7 +307,7 @@ export class TheMovieDatabase extends BaseClass {
    * @returns Promise resolving to paginated list of popular TV shows
    */
   async fetchPopularTv(page: number = 1): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
-    return this.fetchPaginatedData('/tv/popular', { page: String(page) });
+    return this.fetchPaginatedData('/tv/popular', { page: String(page) }, 24);
   }
 
   /**
@@ -282,7 +317,7 @@ export class TheMovieDatabase extends BaseClass {
    * @returns Promise resolving to paginated list of top-rated TV shows
    */
   async fetchTopShows(page: number = 1): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
-    return this.fetchPaginatedData('/tv/top_rated', { page: String(page) });
+    return this.fetchPaginatedData('/tv/top_rated', { page: String(page) }, 168);
   }
 
   /**
@@ -304,12 +339,16 @@ export class TheMovieDatabase extends BaseClass {
       };
     }
 
-    return this.fetchPaginatedMovieData('/search/movie', {
-      include_adult: 'false',
-      page: String(page),
-      query,
-      ...(year !== undefined && { primary_release_year: String(year) }),
-    });
+    return this.fetchPaginatedMovieData(
+      '/search/movie',
+      {
+        include_adult: 'false',
+        page: String(page),
+        query: query.trim().toLowerCase(),
+        ...(year !== undefined && { primary_release_year: String(year) }),
+      },
+      168,
+    );
   }
 
   /**
@@ -327,6 +366,10 @@ export class TheMovieDatabase extends BaseClass {
         status: 400,
       };
     }
+
+    const cacheKey = `tmdb-movie-${tmdbId}`;
+    const cached = await redisGetCache<IResponse<IMovieInfo | null>>(cacheKey);
+    if (cached) return cached;
 
     try {
       const queryParams = new URLSearchParams({
@@ -385,7 +428,13 @@ export class TheMovieDatabase extends BaseClass {
         },
       };
 
-      return { data: data };
+      const finalResult = { data: data };
+
+      if (data && data !== null) {
+        await redisSetCache<IResponse<IMovieInfo | null>>(cacheKey, finalResult, 24);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         data: null,
@@ -406,7 +455,11 @@ export class TheMovieDatabase extends BaseClass {
     timeWindow: 'day' | 'week' = 'week',
     page: number = 1,
   ): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
-    return this.fetchPaginatedMovieData(`/trending/movie/${timeWindow}`, { page: String(page) });
+    return this.fetchPaginatedMovieData(
+      `/trending/movie/${timeWindow}`,
+      { page: String(page) },
+      timeWindow === 'day' ? 6 : 24,
+    );
   }
 
   /**
@@ -416,7 +469,7 @@ export class TheMovieDatabase extends BaseClass {
    * @returns Promise resolving to paginated list of popular movies
    */
   async fetchPopularMovies(page: number = 1): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
-    return this.fetchPaginatedMovieData('/movie/popular', { page: String(page) });
+    return this.fetchPaginatedMovieData('/movie/popular', { page: String(page) }, 24);
   }
 
   /**
@@ -426,7 +479,7 @@ export class TheMovieDatabase extends BaseClass {
    * @returns Promise resolving to paginated list of top-rated movies
    */
   async fetchTopMovies(page: number = 1): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
-    return this.fetchPaginatedMovieData('/movie/top_rated', { page: String(page) });
+    return this.fetchPaginatedMovieData('/movie/top_rated', { page: String(page) }, 168);
   }
 
   /**
@@ -436,10 +489,15 @@ export class TheMovieDatabase extends BaseClass {
    * @returns Promise with enriched current seasonal anime data
    */
   async fetchSeasonalAnime(page: number = 1): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
+    const { season, year } = this.getCurrentSeasonAndYear();
+
+    const cacheKey = `tmdb-seasonal-${season}-${year}-${page}`;
+    const cached = await redisGetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const endpoint = '/discover/tv';
 
-      const { season, year } = this.getCurrentSeasonAndYear();
       const { start, end } = this.getSeasonDates(season, year);
 
       const params = {
@@ -492,13 +550,19 @@ export class TheMovieDatabase extends BaseClass {
         rating: item.vote_average || null,
       }));
 
-      return {
+      const finalResult = {
         hasNextPage: result.page < result.total_pages,
         currentPage: result.page,
         totalResults: result.total_results,
         lastPage: result.total_pages,
         data: data,
       };
+
+      if (Array.isArray(data) && data.length > 0) {
+        await redisSetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey, finalResult, 12);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,
@@ -517,7 +581,11 @@ export class TheMovieDatabase extends BaseClass {
    * @param page - Page number (default: 1)
    * @returns Promise with enriched top anime data
    */
-  async fetchPopularAnime(page: number): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
+  async fetchPopularAnime(page: number = 1): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
+    const cacheKey = `tmdb-popular-anime-${page}`;
+    const cached = await redisGetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const endpoint = '/discover/tv';
 
@@ -566,13 +634,19 @@ export class TheMovieDatabase extends BaseClass {
         rating: item.vote_average || null,
       }));
 
-      return {
+      const finalResult = {
         hasNextPage: result.page < result.total_pages,
         currentPage: result.page,
         totalResults: result.total_results,
         lastPage: result.total_pages,
         data: data,
       };
+
+      if (Array.isArray(data) && data.length > 0) {
+        await redisSetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey, finalResult, 24);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,
@@ -593,7 +667,11 @@ export class TheMovieDatabase extends BaseClass {
    * @param page - Page number (default: 1)
    * @returns Promise with enriched top anime data
    */
-  async fetchTopAnime(page: number): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
+  async fetchTopAnime(page: number = 1): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
+    const cacheKey = `tmdb-top-anime-${page}`;
+    const cached = await redisGetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const endpoint = '/discover/tv';
 
@@ -647,13 +725,19 @@ export class TheMovieDatabase extends BaseClass {
         rating: item.vote_average || null,
       }));
 
-      return {
+      const finalResult = {
         hasNextPage: result.page < result.total_pages,
         currentPage: result.page,
         totalResults: result.total_results,
         lastPage: result.total_pages,
         data: data,
       };
+
+      if (Array.isArray(data) && data.length > 0) {
+        await redisSetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey, finalResult, 168);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,
@@ -673,9 +757,14 @@ export class TheMovieDatabase extends BaseClass {
    * @returns Promise with enriched weekly anime data
    */
   async fetchWeeklyAnime(page: number = 1): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
+    const { start, end } = this.getWeeklyDates();
+
+    const cacheKey = `tmdb-weekly-${start}-${page}`;
+    const cached = await redisGetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const endpoint = '/discover/tv';
-      const { start, end } = this.getWeeklyDates();
 
       const params = {
         api_key: this.apiKey,
@@ -728,13 +817,19 @@ export class TheMovieDatabase extends BaseClass {
         rating: item.vote_average || null,
       }));
 
-      return {
+      const finalResult = {
         hasNextPage: result.page < result.total_pages,
         currentPage: result.page,
         totalResults: result.total_results,
         lastPage: result.total_pages,
         data: data,
       };
+
+      if (Array.isArray(data) && data.length > 0) {
+        await redisSetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey, finalResult, 12);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,
@@ -758,6 +853,10 @@ export class TheMovieDatabase extends BaseClass {
         status: 400,
       };
     }
+
+    const cacheKey = `tmdb-show-art-${tmdbId}`;
+    const cached = await redisGetCache<IResponse<IMetaMovieArtworks | null>>(cacheKey);
+    if (cached) return cached;
 
     try {
       const queryString = new URLSearchParams({
@@ -793,7 +892,13 @@ export class TheMovieDatabase extends BaseClass {
         ),
       };
 
-      return { data: data };
+      const finalResult = { data: data };
+
+      if (data) {
+        await redisSetCache<IResponse<IMetaMovieArtworks | null>>(cacheKey, finalResult, 168);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         data: null,
@@ -814,6 +919,10 @@ export class TheMovieDatabase extends BaseClass {
         status: 400,
       };
     }
+
+    const cacheKey = `tmdb-movie-art-${tmdbId}`;
+    const cached = await redisGetCache<IResponse<IMetaMovieArtworks | null>>(cacheKey);
+    if (cached) return cached;
 
     try {
       const queryString = new URLSearchParams({
@@ -849,7 +958,13 @@ export class TheMovieDatabase extends BaseClass {
         ),
       };
 
-      return { data: data };
+      const finalResult = { data: data };
+
+      if (data) {
+        await redisSetCache<IResponse<IMetaMovieArtworks | null>>(cacheKey, finalResult, 168);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         data: null,
@@ -936,12 +1051,19 @@ export class TheMovieDatabase extends BaseClass {
    * @private
    * @param endpoint - The API endpoint to fetch data from (e.g., '/search/tv')
    * @param params - Query parameters for the API request
+   * @param ttlHours - Cache TTL in hours
    * @returns Promise resolving to paginated TV show data with metadata
    */
   private async fetchPaginatedData(
     endpoint: string,
     params: Record<string, string>,
+    ttlHours: number = 24,
   ): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
+    const sortedParams = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+    const cacheKey = `tmdb-tv-${endpoint}-${new URLSearchParams(sortedParams).toString()}`;
+    const cached = await redisGetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const allParams = {
         language: 'en-US',
@@ -973,7 +1095,7 @@ export class TheMovieDatabase extends BaseClass {
 
       const pagination = {
         currentPage: result.page,
-        hasNextPage: result.total_pages > 1,
+        hasNextPage: result.page < result.total_pages,
         totalPages: result.total_pages,
         totalResults: result.total_results,
       };
@@ -993,13 +1115,19 @@ export class TheMovieDatabase extends BaseClass {
         rating: item.vote_average || null,
       }));
 
-      return {
+      const finalResult = {
         hasNextPage: pagination.hasNextPage,
         currentPage: pagination.currentPage,
         totalResults: pagination.totalResults,
         lastPage: pagination.totalPages,
         data: data as IMetaMovie[],
       };
+
+      if (Array.isArray(data) && data.length > 0) {
+        await redisSetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey, finalResult, ttlHours);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,
@@ -1019,12 +1147,19 @@ export class TheMovieDatabase extends BaseClass {
    * @private
    * @param endpoint - The API endpoint to fetch data from (e.g., '/search/movie')
    * @param params - Query parameters for the API request
+   * @param ttlHours - Cache TTL in hours
    * @returns Promise resolving to paginated movie data with metadata
    */
   private async fetchPaginatedMovieData(
     endpoint: string,
     params: Record<string, string>,
+    ttlHours: number = 24,
   ): Promise<IMetaMoviePaginated<IMetaMovie[] | []>> {
+    const sortedParams = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+    const cacheKey = `tmdb-movie-${endpoint}-${new URLSearchParams(sortedParams).toString()}`;
+    const cached = await redisGetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const queryParams = new URLSearchParams({
         language: 'en-US',
@@ -1053,7 +1188,7 @@ export class TheMovieDatabase extends BaseClass {
       const result = await response.json();
       const pagination = {
         currentPage: result.page,
-        hasNextPage: result.total_pages > 1,
+        hasNextPage: result.page < result.total_pages,
         totalPages: result.total_pages,
         totalResults: result.total_results,
       };
@@ -1071,13 +1206,19 @@ export class TheMovieDatabase extends BaseClass {
         rating: item.vote_average || null,
       }));
 
-      return {
+      const finalResult = {
         hasNextPage: pagination.hasNextPage,
         currentPage: pagination.currentPage,
         totalResults: pagination.totalResults,
         lastPage: pagination.totalPages,
         data: data as IMetaMovie[],
       };
+
+      if (Array.isArray(data) && data.length > 0) {
+        await redisSetCache<IMetaMoviePaginated<IMetaMovie[] | []>>(cacheKey, finalResult, ttlHours);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         hasNextPage: false,

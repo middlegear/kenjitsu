@@ -1,4 +1,5 @@
 import type { ClientOptions } from '../../config/client.js';
+import { redisGetCache, redisSetCache } from '../../config/redis.js';
 import type { IResponse } from '../../types/base.js';
 import type { IMetaAnime, IMetaAnimeEpisode, IProviderId, IRelatedAnimeData } from '../../types/meta/meta-anime.js';
 import { BaseClass } from '../models/base.js';
@@ -27,6 +28,10 @@ class Kitsu extends BaseClass {
    *          objects, or an empty array on failure.
    */
   async search(query: string): Promise<IResponse<IMetaAnime[] | []>> {
+    const cacheKey = `kitsu-search-${query.trim().toLowerCase()}`;
+    const cached = await redisGetCache<IResponse<IMetaAnime[] | []>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const response = await this.client.fetch(`${this.baseUrl}/anime?filter[text]=${encodeURIComponent(query)}`, {
         method: 'GET',
@@ -102,9 +107,15 @@ class Kitsu extends BaseClass {
         };
       });
 
-      return {
+      const finalResult = {
         data,
       };
+
+      if (Array.isArray(data) && data.length > 0) {
+        await redisSetCache<IResponse<IMetaAnime[] | []>>(cacheKey, finalResult, 168);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown Err',
@@ -122,6 +133,10 @@ class Kitsu extends BaseClass {
    *          or an empty array on failure.
    */
   async searchSlug(query: string): Promise<IResponse<IMetaAnime[] | []>> {
+    const cacheKey = `kitsu-slug-${query.trim().toLowerCase()}`;
+    const cached = await redisGetCache<IResponse<IMetaAnime[] | []>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const response = await this.client.fetch(`${this.baseUrl}/anime?filter[slug]=${encodeURIComponent(query)}`, {
         method: 'GET',
@@ -197,9 +212,15 @@ class Kitsu extends BaseClass {
         };
       });
 
-      return {
+      const finalResult = {
         data,
       };
+
+      if (Array.isArray(data) && data.length > 0) {
+        await redisSetCache<IResponse<IMetaAnime[] | []>>(cacheKey, finalResult, 168);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown Err',
@@ -217,6 +238,10 @@ class Kitsu extends BaseClass {
    *          or `null` on failure.
    */
   async fetchInfo(id: number): Promise<IResponse<IMetaAnime | null>> {
+    const cacheKey = `kitsu-info-${id}`;
+    const cached = await redisGetCache<IResponse<IMetaAnime | null>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const response = await this.client.fetch(`${this.baseUrl}/anime/${id}`, {
         method: 'GET',
@@ -289,9 +314,15 @@ class Kitsu extends BaseClass {
         producers: [],
       };
 
-      return {
+      const finalResult = {
         data,
       };
+
+      if (data) {
+        await redisSetCache<IResponse<IMetaAnime | null>>(cacheKey, finalResult, 12);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown Err',
@@ -309,12 +340,24 @@ class Kitsu extends BaseClass {
   async fetchEpisodes(id: number): Promise<IResponse<IMetaAnimeEpisode[] | []>> {
     if (!id) return { error: `Missing required param: id`, data: [] };
 
+    const cacheKey = `kitsu-episodes-${id}`;
+    const cached = await redisGetCache<IResponse<IMetaAnimeEpisode[] | []>>(cacheKey);
+    if (cached) return cached;
+
     const anizipResult = await this.fetchAnizipEpisodes(id);
 
     if (anizipResult.data && anizipResult.data.length > 0) {
+      await redisSetCache<IResponse<IMetaAnimeEpisode[] | []>>(cacheKey, anizipResult, 6);
       return anizipResult;
     }
-    return await this.fetchKitsuEpisodes(id);
+
+    const kitsuResult = await this.fetchKitsuEpisodes(id);
+
+    if (!kitsuResult.error && Array.isArray(kitsuResult.data) && kitsuResult.data.length > 0) {
+      await redisSetCache<IResponse<IMetaAnimeEpisode[] | []>>(cacheKey, kitsuResult, 6);
+    }
+
+    return kitsuResult;
   }
   /**
    * Resolves an AniList anime ID to its corresponding Kitsu entry.
@@ -326,6 +369,10 @@ class Kitsu extends BaseClass {
    * @returns A response containing a lightweight mapping object
    */
   async fetchMapping(id: number, externalSite: string = 'anilist'): Promise<IResponse<IProviderId | null>> {
+    const cacheKey = `kitsu-mapping-${externalSite}-${id}`;
+    const cached = await redisGetCache<IResponse<IProviderId | null>>(cacheKey);
+    if (cached) return cached;
+
     try {
       const response = await this.client.fetch(
         `${this.baseUrl}/mappings?filter[externalSite]=${externalSite}/anime&filter[externalId]=${id}&include=item`,
@@ -352,7 +399,7 @@ class Kitsu extends BaseClass {
       }
       const anime = result.included?.find((item: any) => item.type === 'anime' && item.id === kitsuId);
 
-      return {
+      const finalResult = {
         data: {
           id: kitsuId,
           provider: 'Kitsu',
@@ -362,6 +409,12 @@ class Kitsu extends BaseClass {
           source: null,
         },
       };
+
+      if (finalResult.data.id) {
+        await redisSetCache<IResponse<IProviderId | null>>(cacheKey, finalResult, 168);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown Err',
@@ -389,6 +442,10 @@ class Kitsu extends BaseClass {
         status: 400,
       };
     }
+
+    const cacheKey = `kitsu-related-${mediaId}`;
+    const cached = await redisGetCache<IResponse<IRelatedAnimeData[] | []>>(cacheKey);
+    if (cached) return cached;
 
     try {
       const response = await this.client.fetch(
@@ -426,9 +483,15 @@ class Kitsu extends BaseClass {
         })
         .filter((entry: any): entry is IRelatedAnimeData => entry !== null);
 
-      return {
+      const finalResult = {
         data: this.sortByTimeline(res),
       };
+
+      if (Array.isArray(res) && res.length > 0) {
+        await redisSetCache<IResponse<IRelatedAnimeData[] | []>>(cacheKey, finalResult, 168);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown Error',
@@ -449,6 +512,10 @@ class Kitsu extends BaseClass {
    */
   async fetchParentSeries(mediaId: string): Promise<IResponse<IRelatedAnimeData[] | []>> {
     const visitedIds = new Set<string>();
+
+    const cacheKey = `kitsu-franchise-${mediaId}`;
+    const cached = await redisGetCache<IResponse<IRelatedAnimeData[] | []>>(cacheKey);
+    if (cached) return cached;
 
     try {
       let currentId = mediaId;
@@ -614,9 +681,15 @@ class Kitsu extends BaseClass {
         };
       }
 
-      return {
+      const finalResult = {
         data: timeline,
       };
+
+      if (Array.isArray(timeline) && timeline.length > 0) {
+        await redisSetCache<IResponse<IRelatedAnimeData[] | []>>(cacheKey, finalResult, 720);
+      }
+
+      return finalResult;
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Unknown Error',

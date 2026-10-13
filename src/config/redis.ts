@@ -49,16 +49,17 @@ export async function checkRedis() {
 const DEFAULT_CACHE_EXPIRY_HOURS = 1;
 
 /**
- * Sets a value in the cache (Redis) for permanent storage.
+ * Sets a value in the cache (Redis).
  * @param key your key to set cache
- * @param value  the data you want cached
- * @param ttlInHours =DEFAULT_CACHE_EXPIRY_HOURS] Set cache expiry in hours. Use value zero for permanent storage or set a value( default = 1(hour))
+ * @param value the data you want cached
+ * @param ttlInHours Set cache expiry in hours. Use 0 for permanent storage (default = 1 hour)
  */
 async function redisSetCache<T>(key: string, value: T, ttlInHours: number = DEFAULT_CACHE_EXPIRY_HOURS): Promise<void> {
-  const stringValue = JSON.stringify(value);
+  if (!redis) return;
 
-  if (redis) {
-    // If ttlInHours is set to 0 or you want to set it as permanent
+  try {
+    const stringValue = JSON.stringify(value);
+
     if (ttlInHours === 0) {
       await redis.set(key, stringValue);
       console.log(`Data stored permanently in Redis (Key: ${key})`);
@@ -66,39 +67,42 @@ async function redisSetCache<T>(key: string, value: T, ttlInHours: number = DEFA
       await redis.set(key, stringValue, 'EX', ttlInHours * 3600);
       console.log(`Data stored in Redis with TTL (Key: ${key}, TTL: ${ttlInHours} hours)`);
     }
+  } catch (error) {
+    console.error(`Redis set failed (Key: ${key}):`, error instanceof Error ? error.message : error);
   }
 }
 
 /**
- *  * @param key your key to retrieve data
  * Retrieves a value from the cache (Redis).
+ * @param key your key to retrieve data
  */
 async function redisGetCache<T>(key: string): Promise<T | null> {
-  if (redis) {
-    const data = await redis.get(key);
-    if (data) {
-      try {
-        const value = JSON.parse(data) as T;
-        console.log(`Cache hit (Redis) - Key: ${key}`);
+  if (!redis) return null;
 
-        return value;
-      } catch (error) {
-        console.error('Error parsing JSON from Redis:', error);
-        return null;
-      }
+  try {
+    const data = await redis.get(key);
+
+    if (!data) {
+      console.log(`Cache miss - Key: ${key}`);
+      return null;
     }
+
+    const value = JSON.parse(data) as T;
+    console.log(`Cache hit (Redis) - Key: ${key}`);
+    return value;
+  } catch (error) {
+    console.error(`Redis get failed (Key: ${key}):`, error instanceof Error ? error.message : error);
+    return null;
   }
-  if (redis) {
-    console.log(`Cache miss - Key: ${key}`);
-  }
-  return null;
 }
 
 /**
- * Purges a specific key or the entire cache (Redis and/or in-memory).
+ * Purges a specific key or the entire cache (Redis).
  */
 async function purgeCache(key?: string): Promise<void> {
-  if (redis) {
+  if (!redis) return;
+
+  try {
     if (key) {
       await redis.del(key);
       console.log(`Redis cache cleared for key: ${key}`);
@@ -106,6 +110,8 @@ async function purgeCache(key?: string): Promise<void> {
       await redis.flushall();
       console.log('Entire Redis cache has been purged');
     }
+  } catch (error) {
+    console.error('Redis purge failed:', error instanceof Error ? error.message : error);
   }
 }
 

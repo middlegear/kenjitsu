@@ -1683,9 +1683,10 @@ export class Anilist extends BaseClass {
     page: number = 1,
     perPage: number = 20,
   ): Promise<IMetaAnimePaginated<AiringSchedule[] | []>> {
-    const cachekey = `anilist-airing-schedule-${date}`;
+    const cachekey = `anilist-airing-schedule-${date}-${page}-${perPage}`;
     const cached = await redisGetCache<IMetaAnimePaginated<AiringSchedule[] | []>>(cachekey);
     if (cached) return cached;
+
     try {
       const start = this.getAniListVariables(date).start;
       const end = this.getAniListVariables(date).end;
