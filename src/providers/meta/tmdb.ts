@@ -61,7 +61,7 @@ export class TheMovieDatabase extends BaseClass {
         query: query.trim().toLowerCase(),
         ...(year !== undefined && { first_air_date_year: String(year) }),
       },
-      168,
+      6,
     );
   }
   /**
@@ -347,7 +347,7 @@ export class TheMovieDatabase extends BaseClass {
         query: query.trim().toLowerCase(),
         ...(year !== undefined && { primary_release_year: String(year) }),
       },
-      168,
+      6,
     );
   }
 

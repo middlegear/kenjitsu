@@ -26,7 +26,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
       }
 
       return reply
-        .header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`)
+        .header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`)
         .status(200)
         .send(result);
     } catch (error) {
@@ -195,7 +195,7 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
       }
 
       return reply
-        .header('Cache-Control', `public, s-maxage=${168 * 60 * 60}, stale-while-revalidate=300`)
+        .header('Cache-Control', `public, s-maxage=${6 * 60 * 60}, stale-while-revalidate=300`)
         .status(200)
         .send(result);
     } catch (error) {
