@@ -7,6 +7,7 @@ import type { ICinemetaEpisode, ICineMetaSearch } from '../types/cinemeta.js';
 import type { IMetaAnime } from '../types/meta/meta-anime.js';
 import { AIOMetadata } from './aiometadata.js';
 import type { AnimeInfoResolver } from './anime-resolver.js';
+import { getByAnilistId, upsertMapping } from '../db/queries.js';
 
 type CinemetaMediaType = 'movie' | 'series';
 
@@ -744,27 +745,46 @@ class Cinemeta extends BaseClass {
         };
       }
 
-      const response = await this.searchCineMetaMedia(anilistId, animeData);
+      let mediaId: string | null = null;
+      let format: string | null = null;
 
-      if (response.error || !response.data) {
-        return {
-          data: [],
-          error: response.error,
-          status: response.status ?? 404,
-        };
+
+      const existing = await getByAnilistId(anilistId);
+      if (existing?.imdb_id && existing.media_type) {
+        mediaId = existing.imdb_id;
+        format = existing.media_type;
       }
 
-      const mediaId = response.data.imdbId || response.data.id;
+      if (!mediaId || !format) {
+        const response = await this.searchCineMetaMedia(anilistId, animeData);
 
-      if (!mediaId) {
-        return {
-          data: [],
-          error: 'No valid media ID found',
-          status: 400,
-        };
+        if (response.error || !response.data) {
+          return {
+            data: [],
+            error: response.error,
+            status: response.status ?? 404,
+          };
+        }
+
+        mediaId = response.data.imdbId || response.data.id;
+        format = response.data.type;
+
+        if (!mediaId || !format) {
+          return {
+            data: [],
+            error: 'No valid media ID or format found',
+            status: 400,
+          };
+        }
+
+        try {
+          await upsertMapping(anilistId, format, { imdbId: mediaId });
+        } catch (err) {
+          console.error('Failed to save anime mapping:', err);
+        }
       }
 
-      const format = response.data.type as string;
+      // 3. Fetch episodes
       const aioMetadata = new AIOMetadata();
       const episodeList = await aioMetadata.fetchEpisodes(mediaId, format);
 
