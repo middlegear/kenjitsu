@@ -36,8 +36,17 @@ class Cinemeta extends BaseClass {
   private static readonly SCHEDULE_TTL_MS = Cinemeta.SCHEDULE_TTL_HOURS * 60 * 60 * 1000;
   private static readonly SCHEDULE_BACKOFF_MS = 5 * 60 * 1000;
 
+  /** A candidate must list one of these genres to be accepted as an anime match. */
+  private static readonly ANIME_GENRE_PATTERN = /\b(anime|animation)\b/i;
+
+  /** Max candidates we'll pay a metadata request for per query. */
+  private static readonly MAX_GENRE_CHECKS = 5;
+
   private readonly baseUrl = 'https://v3-cinemeta.strem.io';
   private readonly mediaTypes: CinemetaMediaType[] = ['movie', 'series'];
+
+  // One shared instance so genre checks and episode fetches share its cache
+  private readonly aioMetadata = new AIOMetadata();
 
   // In-process layer on top of Redis (also the only cache when Redis is disabled)
   private scheduleMemory: { at: number; data: ScheduleMap } | null = null;
@@ -603,14 +612,37 @@ class Cinemeta extends BaseClass {
     return candidateType !== expected;
   }
 
-  private findBestMatch(
+  /**
+   * True only when the candidate's own metadata lists an Animation/Anime genre.
+   * Fails closed: if the metadata can't be fetched, the candidate is not trusted.
+   * The fetch also warms AIOMetadata's cache, so the winner's later episode
+   * fetch costs no extra request.
+   */
+  private async hasAnimeGenre(candidate: ICineMetaSearch): Promise<boolean> {
+    const id = candidate.imdbId || candidate.id;
+    const type = candidate.type;
+
+    if (!id || !type) return false;
+
+    const result = await this.aioMetadata.fetchGenres(id, type);
+
+    if (result.error || !result.data) return false;
+
+    return result.data.some(genre => Cinemeta.ANIME_GENRE_PATTERN.test(genre));
+  }
+
+  /**
+   * Scores every candidate that survives the knockout, then walks them from
+   * best score down and returns the first one whose genres confirm it is
+   * animation. Only the top MAX_GENRE_CHECKS candidates ever cost a request.
+   */
+  private async findBestMatch(
     anime: IMetaAnime,
     titles: string[],
     candidates: ICineMetaSearch[],
     minThreshold: number = 0.7,
-  ): ICineMetaSearch | null {
-    let best: ICineMetaSearch | null = null;
-    let bestScore = -Infinity;
+  ): Promise<ICineMetaSearch | null> {
+    const scored: { candidate: ICineMetaSearch; score: number }[] = [];
 
     for (const candidate of candidates) {
       if (this.isKnockedOut(candidate, anime)) continue;
@@ -619,13 +651,16 @@ class Cinemeta extends BaseClass {
 
       if (score < minThreshold) continue;
 
-      if (score > bestScore) {
-        bestScore = score;
-        best = candidate;
-      }
+      scored.push({ candidate, score });
     }
 
-    return best;
+    scored.sort((a, b) => b.score - a.score);
+
+    for (const { candidate } of scored.slice(0, Cinemeta.MAX_GENRE_CHECKS)) {
+      if (await this.hasAnimeGenre(candidate)) return candidate;
+    }
+
+    return null;
   }
 
   private async search(query: string): Promise<IResponse<ICineMetaSearch[] | []>> {
@@ -712,7 +747,7 @@ class Cinemeta extends BaseClass {
 
         if (mediaSearch.error || !mediaSearch.data?.length) continue;
 
-        const match = this.findBestMatch(animeData, titles, mediaSearch.data, 0.6);
+        const match = await this.findBestMatch(animeData, titles, mediaSearch.data, 0.6);
 
         if (match) {
           return { data: match };
@@ -748,7 +783,6 @@ class Cinemeta extends BaseClass {
       let mediaId: string | null = null;
       let format: string | null = null;
 
-
       const existing = await getByAnilistId(anilistId);
       if (existing?.imdb_id && existing.media_type) {
         mediaId = existing.imdb_id;
@@ -756,6 +790,8 @@ class Cinemeta extends BaseClass {
       }
 
       if (!mediaId || !format) {
+        // Only returns a genre-verified match, so upsertMapping below
+        // can never store an unverified id
         const response = await this.searchCineMetaMedia(anilistId, animeData);
 
         if (response.error || !response.data) {
@@ -784,8 +820,8 @@ class Cinemeta extends BaseClass {
         }
       }
 
-      // 3. Fetch episodes
-      const aioMetadata = new AIOMetadata();
+      // 3. Fetch episodes (served from cache for a freshly matched title)
+      const aioMetadata = this.aioMetadata;
       const episodeList = await aioMetadata.fetchEpisodes(mediaId, format);
 
       if (episodeList.error || !episodeList.data || episodeList.data.length === 0) {
