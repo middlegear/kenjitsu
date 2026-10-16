@@ -39,6 +39,8 @@ class Cinemeta extends BaseClass {
   /** A candidate must list one of these genres to be accepted as an anime match. */
   private static readonly ANIME_GENRE_PATTERN = /\b(anime|animation)\b/i;
 
+  private static readonly UNRELEASED_STATUSES = new Set(['unreleased', 'not_yet_released', 'upcoming', 'tba']);
+
   /** Max candidates we'll pay a metadata request for per query. */
   private static readonly MAX_GENRE_CHECKS = 5;
 
@@ -389,6 +391,8 @@ class Cinemeta extends BaseClass {
     const ROMAN = '(?:II|III|IV|V|VI|VII|VIII|IX|X)';
 
     const cleaned = title
+      // "(TV)", "(OVA)", "(Movie)" etc. at the end
+      .replace(/\s*\((?:TV|OVA|ONA|Movie|Special)\)\s*$/i, '')
       // "2nd Season", "Final Season", "Third Cour", "Second Part"
       .replace(new RegExp(`\\b${ORDINAL}\\s+(?:season|cour|part)\\b`, 'gi'), ' ')
       // "Season 2", "Cour 2", "Part 4", "Season II"
@@ -712,6 +716,16 @@ class Cinemeta extends BaseClass {
           data: [],
           error: 'Could not resolve anime information',
           status: 404,
+        };
+      }
+
+      const animeStatus = animeData.status?.toLowerCase();
+
+      if (animeStatus && Cinemeta.UNRELEASED_STATUSES.has(animeStatus)) {
+        return {
+          data: [],
+          error: 'Not yet released',
+          status: 400,
         };
       }
 
