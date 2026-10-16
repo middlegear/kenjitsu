@@ -7,6 +7,7 @@ export interface ICineMetaSearch {
   type: string | null;
   startYear: string | null;
   endYear: string | null;
+  [x: string]: any;
 }
 
 export interface ICinemetaEpisode {

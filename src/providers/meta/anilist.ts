@@ -49,7 +49,7 @@ export class Anilist extends BaseClass {
     options: ClientOptions = {
       rateLimit: {
         intervalMs: 60000,
-        requestsPerInterval: 30,
+        requestsPerInterval: 29,
       },
     },
   ) {
