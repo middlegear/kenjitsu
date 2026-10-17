@@ -82,7 +82,7 @@ export interface IMetaMovieEpisodes {
   seasonNumber: number | null;
   tmdbId?: number | null;
   runtime: string | null;
-  thumbnail: string | null;
+  images: string | null;
 }
 
 export interface IMetaMoviePaginated<T> extends IBasePaginated<T> {

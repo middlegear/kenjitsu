@@ -169,8 +169,8 @@ export class TheMovieDatabase extends BaseClass {
   /**
    * Fetches episodes available in a specific season of a TV show from TMDb.
    *
-   * @param tmdbId - The unique TMDb ID for the TV show (required)
-   * @param season - The season number for which to fetch episodes (required)
+   * @param tmdbId The unique TMDb ID for the TV show (required)
+   * @param season The season number for which to fetch episodes (required)
    * @returns Promise resolving to array of episodes with their detailed information for the specified season
    */
   async fetchTvEpisodes(tmdbId: number, season: number): Promise<IResponse<IMetaMovieEpisodes[] | []>> {
@@ -213,7 +213,14 @@ export class TheMovieDatabase extends BaseClass {
       const finalResult = { data: episodes };
 
       if (Array.isArray(episodes) && episodes.length > 0) {
-        await redisSetCache<IResponse<IMetaMovieEpisodes[] | []>>(cacheKey, finalResult, 12);
+        const lastEpisode = episodes[episodes.length - 1];
+
+        const isLastFilled =
+          lastEpisode && lastEpisode.summary !== null && lastEpisode.rating !== null && lastEpisode.images !== null;
+
+        const duration = isLastFilled ? 168 : 1;
+
+        await redisSetCache<IResponse<IMetaMovieEpisodes[] | []>>(cacheKey, finalResult, duration);
       }
 
       return finalResult;
@@ -265,7 +272,7 @@ export class TheMovieDatabase extends BaseClass {
         seasonNumber: result.season_number || null,
         tmdbEpisodeId: result.id || null,
         runtime: result.runtime || null,
-        thumbnail: result.still_path ? `https://image.tmdb.org/t/p/w1280${result.still_path}` : null,
+        images: result.still_path ? `https://image.tmdb.org/t/p/w1280${result.still_path}` : null,
       };
 
       const finalResult = {
