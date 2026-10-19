@@ -5,11 +5,9 @@ import { BaseClass } from '../providers/models/base.js';
 import type { IResponse } from '../types/base.js';
 import type { ICinemetaEpisode, ICineMetaSearch } from '../types/cinemeta.js';
 import type { IMetaAnime, IRelatedAnimeData } from '../types/meta/meta-anime.js';
-import { AIOMetadata } from './aiometadata.js';
+import { AIOMetadata, type MediaType } from './aiometadata.js';
 import type { AnimeInfoResolver } from './anime-resolver.js';
 import { getByAnilistId, upsertMapping } from '../db/queries.js';
-
-type CinemetaMediaType = 'movie' | 'series';
 
 interface IScheduleNode {
   episode: number;
@@ -20,10 +18,17 @@ interface IScheduleMap {
   [anilistId: string]: IScheduleNode[];
 }
 
+interface IEpisodeSource {
+  imdbId: string;
+  type: string;
+  kitsuId: number | null;
+  episodes: ICinemetaEpisode[];
+}
+
 class Cinemeta extends BaseClass {
   constructor(
     private readonly resolver: AnimeInfoResolver,
-    options: ClientOptions = { browser: 'okhttp4' },
+    options: ClientOptions = { browser: 'okhttp5' },
   ) {
     super(options);
   }
@@ -33,6 +38,9 @@ class Cinemeta extends BaseClass {
   private static readonly SCHEDULE_TTL_HOURS = 1;
 
   private static readonly UNRELEASED_STATUSES = new Set(['unreleased', 'not_yet_released', 'upcoming', 'tba']);
+
+  /** Media types are tried in this order until one yields a valid episode range. */
+  private static readonly SEARCH_ORDER: readonly MediaType[] = ['series', 'movie'];
 
   // One shared instance so search and episode fetches share its cache
   private readonly aioMetadata = new AIOMetadata();
@@ -119,6 +127,8 @@ class Cinemeta extends BaseClass {
    * 2. take `episodes` count from the anchor
    * 3. otherwise everything from the anchor up to endDate
    * 4. otherwise everything from the anchor onward
+   *
+   * An empty result means "not a valid range for this anime".
    */
   private resolveEpisodeRange(anime: IMetaAnime, allEpisodes: ICinemetaEpisode[]): ICinemetaEpisode[] {
     const startDate = this.normalizeDate(anime.releaseDate);
@@ -372,7 +382,7 @@ class Cinemeta extends BaseClass {
    * Titles to search with, in order: the preferred title (english, then
    * romaji, then native), then romaji. Synonyms are never searched; they are
    * only used for scoring. Deduped, and capped because each query costs two
-   * requests (anime series + anime movie catalogs) on a cache miss.
+   * requests per media type on a cache miss.
    */
   private extractSearchQueries(media: IMetaAnime | IRelatedAnimeData, maxQueries = 5): string[] {
     const candidates = [this.extractTitle(media), media.title.romaji];
@@ -413,31 +423,36 @@ class Cinemeta extends BaseClass {
   }
 
   /**
-   * Takes a full list of search candidates, filters out knockouts,
-   * computes title similarities across all query variants, and returns the best match.
+   * Ranks search candidates by title similarity across all query variants
+   * and returns the top `limit`, best first.
+   *
+
    */
-  private findBestMatch(candidates: ICineMetaSearch[], animeData: IMetaAnime | IRelatedAnimeData): ICineMetaSearch | null {
+  private findBestMatch(
+    candidates: ICineMetaSearch[],
+    animeData: IMetaAnime | IRelatedAnimeData,
+    type: MediaType,
+    blacklist: ReadonlySet<string> = new Set(),
+    limit = 5,
+  ): ICineMetaSearch[] {
     const queries = this.extractSearchQueries(animeData);
-    if (!candidates || candidates.length === 0 || !queries || queries.length === 0) {
-      return null;
+    if (!candidates || candidates.length === 0 || queries.length === 0) {
+      return [];
     }
 
-    let bestCandidate: ICineMetaSearch | null = null;
-    let highestScore = -1;
+    const scored: { candidate: ICineMetaSearch; score: number }[] = [];
 
     for (const candidate of candidates) {
-      // 1. Hard disqualifier check (format, episode count, duration, end year)
-      if (this.isKnockedOut(candidate, animeData)) {
+      if (candidate.type !== type || !candidate.imdbId || blacklist.has(candidate.imdbId)) {
         continue;
       }
 
-      const candidateName = candidate.name ?? '';
+      const normCandidate = (candidate.name ?? '').toLowerCase().trim();
       let maxScore = 0;
 
-      // 2. Evaluate title similarity against all target query variants
+      // Evaluate title similarity against all target query variants
       for (const target of queries) {
         const normTarget = target.toLowerCase().trim();
-        const normCandidate = candidateName.toLowerCase().trim();
 
         if (!normTarget || !normCandidate) continue;
         if (normTarget === normCandidate) {
@@ -474,97 +489,30 @@ class Cinemeta extends BaseClass {
         }
       }
 
-      // 3. Track the highest scoring candidate overall
-      if (maxScore > highestScore) {
-        highestScore = maxScore;
-        bestCandidate = candidate;
-      }
+      scored.push({ candidate, score: maxScore });
     }
 
-    return bestCandidate;
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ candidate }) => candidate);
   }
 
   /**
-   * Hard disqualifiers based on AniList/Kitsu metadata & end-year validation.
-   * A candidate that is knocked out is never scored, regardless of title similarity.
+   * Searches AIOMetadata for one media type with every query variant and
+   * returns the top-ranked, non-blacklisted candidates.
    */
-  private isKnockedOut(candidate: ICineMetaSearch, anime: IMetaAnime | IRelatedAnimeData): boolean {
-    const candidateType = candidate.type?.toLowerCase();
-
-    // Unknown candidate type: don't knock out on missing data
-    if (candidateType !== 'movie' && candidateType !== 'series') return false;
-
-    const format = anime.format?.toLowerCase() ?? null;
-    const episodes = typeof anime.episodes === 'number' ? anime.episodes : null;
-    const duration = typeof anime.duration === 'number' && anime.duration > 0 ? anime.duration : null;
-
-    let expected: CinemetaMediaType | null = null;
-
-    if (format === 'movie') {
-      expected = 'movie';
-    } else if (format === 'tv' || format === 'ona' || format === 'ova') {
-      // Standard TV/ONA/OVA are generally series, unless it's explicitly a single-episode movie special
-      if (episodes === 1 && duration !== null && duration > 30) {
-        expected = 'movie';
-      } else {
-        expected = 'series';
-      }
-    } else if (episodes !== null && episodes > 1) {
-      expected = 'series';
-    } else if (duration !== null) {
-      if (duration > 30) {
-        expected = episodes === null ? 'series' : 'movie';
-      } else if (episodes !== 1) {
-        expected = 'series';
-      }
-    }
-
-    if (expected !== null && candidateType !== expected) {
-      return true;
-    }
-
-    if (candidate.endYear) {
-      const candidateEnd = parseInt(candidate.endYear, 10);
-
-      if (!isNaN(candidateEnd)) {
-        const animeStart = anime.year ? Number(anime.year) : null;
-
-        let animeEnd: number | null = null;
-        if (anime.endDate && anime.endDate.toLowerCase() !== 'unknown') {
-          const match = anime.endDate.match(/\d{4}/);
-          if (match) {
-            animeEnd = parseInt(match[0], 10);
-          }
-        }
-
-        const isReleasing = anime.status?.toLowerCase() === 'releasing';
-
-        if (isReleasing && animeStart && candidateEnd < animeStart) {
-          return true;
-        }
-
-        if (animeEnd !== null) {
-          if (Math.abs(candidateEnd - animeEnd) > 2) {
-            return true;
-          }
-        } else if (animeStart !== null && candidateEnd < animeStart) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  private async search(animeData: IMetaAnime): Promise<IResponse<ICineMetaSearch | null>> {
+  private async search(
+    animeData: IMetaAnime | IRelatedAnimeData,
+    type: MediaType,
+    blacklist: ReadonlySet<string>,
+  ): Promise<IResponse<ICineMetaSearch[]>> {
     try {
-      const queries = this.extractSearchQueries(animeData);
       const allResults: ICineMetaSearch[] = [];
       const seenIds = new Set<string>();
 
-      // 1. Fetch search results for all query variants
-      for (const title of queries) {
-        const response = await this.aioMetadata.search(title);
+      for (const title of this.extractSearchQueries(animeData)) {
+        const response = await this.aioMetadata.search(title, type);
 
         if (response && Array.isArray(response.data)) {
           for (const item of response.data) {
@@ -575,42 +523,34 @@ class Cinemeta extends BaseClass {
           }
         }
       }
-      return { data: this.findBestMatch(allResults, animeData) };
+
+      return { data: this.findBestMatch(allResults, animeData, type, blacklist) };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : 'Unknown error', data: null, status: 500 };
+      return { error: error instanceof Error ? error.message : 'Unknown error', data: [], status: 500 };
     }
   }
 
-  private async fetchFranchise(anilistId: number): Promise<IResponse<ICineMetaSearch | null>> {
+  /**
+   * Same as `search`, but using the franchise root's titles instead of the
+   * anime's own (e.g. when a season subtitle isn't what Cinemeta lists).
+   */
+  private async fetchFranchise(
+    anilistId: number,
+    type: MediaType,
+    blacklist: ReadonlySet<string>,
+  ): Promise<IResponse<ICineMetaSearch[]>> {
     try {
       const franchiseResponse = await this.resolver.resolveFranchiseMedia(anilistId);
-      if (franchiseResponse.error || !franchiseResponse.data) {
-        return { data: null, error: franchiseResponse.error || 'Franchise media not found' };
+      const franchiseAnime = franchiseResponse.data?.[0];
+
+      if (franchiseResponse.error || !franchiseAnime) {
+        return { data: [], error: franchiseResponse.error || 'Franchise media not found' };
       }
 
-      const animeData = franchiseResponse.data[0];
-
-      const queries = this.extractSearchQueries(animeData);
-      const allResults: ICineMetaSearch[] = [];
-      const seenIds = new Set<string>();
-
-      for (const title of queries) {
-        const searchResponse = await this.aioMetadata.search(title);
-
-        if (searchResponse && Array.isArray(searchResponse.data)) {
-          for (const item of searchResponse.data) {
-            if (item && item.id && !seenIds.has(item.id)) {
-              seenIds.add(item.id);
-              allResults.push(item);
-            }
-          }
-        }
-      }
-
-      return { data: this.findBestMatch(allResults, animeData) };
+      return await this.search(franchiseAnime, type, blacklist);
     } catch (error) {
       return {
-        data: null,
+        data: [],
         error: error instanceof Error ? error.message : 'Unknown error',
         status: 500,
       };
@@ -638,72 +578,80 @@ class Cinemeta extends BaseClass {
         };
       }
 
-      let imdbId: string | null = null;
-      let type: string | null = null;
-      let kitsuId: number | null = null;
+      // Ids that failed to produce a valid range, shared across every stage below
+      const blacklist = new Set<string>();
 
+      // Fetches a candidate's episodes and resolves the range for this anime.
+      // An empty range blacklists the id so it is never retried in this run.
+      const tryEpisodes = async (imdbId: string, type: string): Promise<ICinemetaEpisode[]> => {
+        if (blacklist.has(imdbId)) return [];
+
+        const raw = (await this.aioMetadata.fetchEpisodes(imdbId, type)).data ?? [];
+        const range = raw.length > 0 ? this.resolveEpisodeRange(animeData, raw) : [];
+
+        if (range.length === 0) blacklist.add(imdbId);
+
+        return range;
+      };
+
+      let source: IEpisodeSource | null = null;
+
+      // 1. Known mappings, accepted only when they produce a valid episode range
       const existing = await getByAnilistId(anilistId);
 
       if (existing?.imdb_id && existing.media_type) {
-        imdbId = existing.imdb_id;
-        type = existing.media_type;
-      } else {
+        const episodes = await tryEpisodes(existing.imdb_id, existing.media_type);
+
+        if (episodes.length > 0) {
+          source = { imdbId: existing.imdb_id, type: existing.media_type, kitsuId: null, episodes };
+        }
+      }
+
+      if (!source) {
         const mapping = await this.aioMetadata.fetchMappingsByProviderId(`anilist:${anilistId}`);
+        const mapped = mapping.error ? null : mapping.data;
 
-        if (!mapping.error && mapping.data && mapping.data.imdbId) {
-          imdbId = mapping.data.imdbId;
-          type = mapping.data.type;
-          kitsuId = mapping.data.kitsuId ? Number(mapping.data.kitsuId) : null;
-        } else {
-          let searchResult = (await this.search(animeData)).data;
+        if (mapped?.imdbId && mapped.type) {
+          const episodes = await tryEpisodes(mapped.imdbId, mapped.type);
 
-          if (searchResult) {
-            imdbId = searchResult.imdbId;
-            type = searchResult.type;
+          if (episodes.length > 0) {
+            source = {
+              imdbId: mapped.imdbId,
+              type: mapped.type,
+              kitsuId: mapped.kitsuId ? Number(mapped.kitsuId) : null,
+              episodes,
+            };
           }
         }
       }
 
-      if (!imdbId || !type) {
-        return {
-          data: [],
-          error: 'Could not resolve IMDbId or type for anime',
-          status: 404,
-        };
-      }
+      if (!source) {
+        const finders = [
+          (type: MediaType) => this.search(animeData, type, blacklist),
+          (type: MediaType) => this.fetchFranchise(anilistId, type, blacklist),
+        ];
 
-      let rawEpisodesResponse = await this.aioMetadata.fetchEpisodes(imdbId, type);
-      let rawEpisodes = rawEpisodesResponse.data;
+        found: for (const find of finders) {
+          for (const type of Cinemeta.SEARCH_ORDER) {
+            for (const candidate of (await find(type)).data ?? []) {
+              if (!candidate.imdbId) continue;
 
-      if (!rawEpisodes || rawEpisodes.length === 0) {
-        const franchiseResult = await this.fetchFranchise(anilistId);
-        if (franchiseResult.data && franchiseResult.data.imdbId && franchiseResult.data.type) {
-          imdbId = franchiseResult.data.imdbId;
-          type = franchiseResult.data.type;
-          rawEpisodesResponse = await this.aioMetadata.fetchEpisodes(imdbId, type);
-          rawEpisodes = rawEpisodesResponse.data;
-        }
-      }
+              const episodes = await tryEpisodes(candidate.imdbId, type);
 
-      if (!rawEpisodes || rawEpisodes.length === 0) {
-        return { data: [], error: 'No episodes found for this media', status: 404 };
-      }
-
-      let resolvedEpisodes = this.resolveEpisodeRange(animeData, rawEpisodes);
-
-      if (resolvedEpisodes.length === 0) {
-        const franchiseResult = await this.fetchFranchise(anilistId);
-        if (franchiseResult.data && franchiseResult.data.imdbId && franchiseResult.data.type) {
-          imdbId = franchiseResult.data.imdbId;
-          type = franchiseResult.data.type;
-          const retryEpisodesResponse = await this.aioMetadata.fetchEpisodes(imdbId, type);
-          if (retryEpisodesResponse.data && retryEpisodesResponse.data.length > 0) {
-            resolvedEpisodes = this.resolveEpisodeRange(animeData, retryEpisodesResponse.data);
+              if (episodes.length > 0) {
+                source = { imdbId: candidate.imdbId, type, kitsuId: null, episodes };
+                break found;
+              }
+            }
           }
         }
       }
 
-      const finalizedResponse = await this.finalizeEpisodes(anilistId, animeData, resolvedEpisodes);
+      if (!source) {
+        return { data: [], error: 'No valid episode range found for this media', status: 404 };
+      }
+
+      const finalizedResponse = await this.finalizeEpisodes(anilistId, animeData, source.episodes);
       const finalizedEpisodes = finalizedResponse.data ?? [];
 
       if (finalizedEpisodes.length === 0) {
@@ -713,16 +661,16 @@ class Cinemeta extends BaseClass {
       const episodesWithIds: ICinemetaEpisode[] = finalizedEpisodes.map((ep, index) => ({
         ...ep,
         episodeNumber: index + 1,
-        kitsuId: kitsuId,
+        kitsuId: source.kitsuId,
       }));
 
-      await upsertMapping(anilistId, type, { imdbId: imdbId });
+      await upsertMapping(anilistId, source.type, { imdbId: source.imdbId });
 
       return { data: episodesWithIds };
     } catch (error) {
       return {
         data: [],
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : String(error),
         status: 500,
       };
     }
