@@ -52,7 +52,13 @@ class Cinemeta extends BaseClass {
    */
   private readonly DATE_ANCHOR_TOLERANCE_DAYS = 7;
 
-  private selectCandidateEpisodes(episodes: ICinemetaEpisode[], animeFormat: string | null): ICinemetaEpisode[] {
+  private selectCandidateEpisodes(
+    episodes: ICinemetaEpisode[],
+    animeFormat: string | null,
+    mediaType?: string,
+  ): ICinemetaEpisode[] {
+    if (mediaType === 'movie') return episodes;
+
     if (animeFormat === 'tv') {
       return episodes.filter(ep => (ep.seasonNumber ?? 0) >= 1);
     }
@@ -74,16 +80,17 @@ class Cinemeta extends BaseClass {
    * Specials (season 0) are ignored in tiers 2 and 3.
    * Returns null when nothing qualifies.
    */
-  private findAnchorIndex(sorted: ICinemetaEpisode[], startDate: Date): number | null {
+  private findAnchorIndex(sorted: ICinemetaEpisode[], startDate: Date, mediaType?: string): number | null {
     const DAY = 86_400_000;
     const monthIdx = (d: Date) => d.getUTCFullYear() * 12 + d.getUTCMonth();
     const targetMonth = monthIdx(startDate);
+    const MONTH_TOLERANCE = 1;
 
     let nearestIdx = -1;
     let nearestDiff = Infinity;
     let windowIdx = -1;
     let windowDiff = Infinity;
-    const firstOfMonth = new Map<number, number>(); // month offset -> first matching index
+    const firstOfMonth = new Map<number, number>();
 
     sorted.forEach((ep, i) => {
       const d = this.normalizeDate(ep.airDate);
@@ -95,11 +102,12 @@ class Cinemeta extends BaseClass {
         nearestIdx = i;
       }
 
-      if ((ep.seasonNumber ?? 0) === 0) return;
+      // Only skip “season 0 / specials” for series – never for movies
+      if (mediaType !== 'movie' && (ep.seasonNumber ?? 0) === 0) return;
 
       const offset = monthIdx(d) - targetMonth;
 
-      if (offset >= 0 && offset <= 1 && diff < windowDiff) {
+      if (offset >= -MONTH_TOLERANCE && offset <= MONTH_TOLERANCE && diff < windowDiff) {
         windowDiff = diff;
         windowIdx = i;
       }
@@ -113,7 +121,12 @@ class Cinemeta extends BaseClass {
       return nearestIdx;
     }
 
-    for (const offset of [0, 1, -1]) {
+    const offsetsToCheck: number[] = [0];
+    for (let i = 1; i <= MONTH_TOLERANCE; i++) {
+      offsetsToCheck.push(i, -i);
+    }
+
+    for (const offset of offsetsToCheck) {
       const idx = firstOfMonth.get(offset);
       if (idx !== undefined) return idx;
     }
@@ -130,7 +143,7 @@ class Cinemeta extends BaseClass {
    *
    * An empty result means "not a valid range for this anime".
    */
-  private resolveEpisodeRange(anime: IMetaAnime, allEpisodes: ICinemetaEpisode[]): ICinemetaEpisode[] {
+  private resolveEpisodeRange(anime: IMetaAnime, allEpisodes: ICinemetaEpisode[], mediaType: string): ICinemetaEpisode[] {
     const startDate = this.normalizeDate(anime.releaseDate);
     const rawEnd = this.normalizeDate(anime.endDate);
     const episodeCount = anime.episodes;
@@ -138,7 +151,7 @@ class Cinemeta extends BaseClass {
     // endDate === startDate means a batch drop, not a usable end boundary
     const endDate = rawEnd && startDate && rawEnd.getTime() === startDate.getTime() ? null : rawEnd;
 
-    const pool = this.selectCandidateEpisodes(allEpisodes, anime.format?.toLowerCase() ?? null);
+    const pool = this.selectCandidateEpisodes(allEpisodes, anime.format?.toLowerCase() ?? null, mediaType);
 
     const sorted = [...pool].sort(
       (a, b) =>
@@ -147,12 +160,18 @@ class Cinemeta extends BaseClass {
         (this.normalizeDate(a.airDate)?.getTime() ?? 0) - (this.normalizeDate(b.airDate)?.getTime() ?? 0),
     );
 
-    if (!startDate) return sorted;
+    if (!startDate) {
+      return mediaType === 'movie' ? sorted.slice(0, 1) : sorted;
+    }
 
-    const anchorIdx = this.findAnchorIndex(sorted, startDate);
+    const anchorIdx = this.findAnchorIndex(sorted, startDate, mediaType);
     if (anchorIdx === null) return [];
 
     const fromStart = sorted.slice(anchorIdx);
+
+    if (mediaType === 'movie') {
+      return fromStart.slice(0, 1);
+    }
 
     if (typeof episodeCount === 'number' && episodeCount > 0) {
       return fromStart.slice(0, episodeCount);
@@ -492,10 +511,13 @@ class Cinemeta extends BaseClass {
       scored.push({ candidate, score: maxScore });
     }
 
-    return scored
+    const result = scored
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(({ candidate }) => candidate);
+    console.log(result);
+
+    return result;
   }
 
   /**
@@ -587,7 +609,7 @@ class Cinemeta extends BaseClass {
         if (blacklist.has(imdbId)) return [];
 
         const raw = (await this.aioMetadata.fetchEpisodes(imdbId, type)).data ?? [];
-        const range = raw.length > 0 ? this.resolveEpisodeRange(animeData, raw) : [];
+        const range = raw.length > 0 ? this.resolveEpisodeRange(animeData, raw, type) : [];
 
         if (range.length === 0) blacklist.add(imdbId);
 

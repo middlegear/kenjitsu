@@ -49,6 +49,7 @@ class AIOMetadata extends BaseClass {
 
     const cacheKey = `AIOMetadata-fetchMappings-${providerId}`;
     const cached = await redisGetCache<IResponse<AIOMetaAnimeMap | null>>(cacheKey);
+
     if (cached) return cached;
 
     try {
@@ -201,7 +202,7 @@ class AIOMetadata extends BaseClass {
             id,
             summary: meta.description ?? null,
             imdbId: meta.id?.startsWith('tt') ? meta.id : id,
-            type: mediaType,
+            type: meta.type,
           },
         ];
       } else {
@@ -221,9 +222,8 @@ class AIOMetadata extends BaseClass {
                 ? item.id
                 : `${id}:${item.season ?? 0}:${item.episode ?? 0}`,
             summary: item.overview ?? null,
-            type: mediaType,
+            type: meta.type,
           }))
-          // Drop unaired / undated episodes
           .filter((episode: ICinemetaEpisode) => {
             if (!episode.airDate) return false;
 
@@ -237,7 +237,7 @@ class AIOMetadata extends BaseClass {
       if (episodes.length > 0) {
         await redisSetCache(cacheKey, result, 24);
       }
-
+      console.log('AIO Episodes', result);
       return result;
     } catch (error) {
       return { data: [], error: error instanceof Error ? error.message : String(error), status: 500 };
