@@ -150,6 +150,7 @@ export class AnimeInfoResolver extends BaseClass {
         ...(match.fromSeason !== undefined && { seasonStart: match.fromSeason }),
         ...(match.fromEpisode !== undefined && { episodeStart: match.fromEpisode }),
       };
+      console.log(normalized);
 
       return { data: normalized, status: 200 };
     } catch (error) {

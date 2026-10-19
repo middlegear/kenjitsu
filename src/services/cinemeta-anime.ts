@@ -52,6 +52,14 @@ class Cinemeta extends BaseClass {
    */
   private readonly DATE_ANCHOR_TOLERANCE_DAYS = 7;
 
+  /**
+   * A failure belongs to an (imdbId, type) pair: the same imdbId can be
+   * invalid as a series yet valid as a movie, so the blacklist is keyed by both.
+   */
+  private static blacklistKey(type: string, imdbId: string): string {
+    return `${type}:${imdbId}`;
+  }
+
   private selectCandidateEpisodes(
     episodes: ICinemetaEpisode[],
     animeFormat: string | null,
@@ -450,7 +458,7 @@ class Cinemeta extends BaseClass {
     animeData: IMetaAnime | IRelatedAnimeData,
     type: MediaType,
     blacklist: ReadonlySet<string> = new Set(),
-    limit = 5,
+    limit = 3,
   ): ICineMetaSearch[] {
     const queries = this.extractSearchQueries(animeData);
     if (!candidates || candidates.length === 0 || queries.length === 0) {
@@ -460,7 +468,7 @@ class Cinemeta extends BaseClass {
     const scored: { candidate: ICineMetaSearch; score: number }[] = [];
 
     for (const candidate of candidates) {
-      if (candidate.type !== type || !candidate.imdbId || blacklist.has(candidate.imdbId)) {
+      if (candidate.type !== type || !candidate.imdbId || blacklist.has(Cinemeta.blacklistKey(type, candidate.imdbId))) {
         continue;
       }
 
@@ -509,12 +517,10 @@ class Cinemeta extends BaseClass {
       scored.push({ candidate, score: maxScore });
     }
 
-    const result = scored
+    return scored
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(({ candidate }) => candidate);
-
-    return result;
   }
 
   /**
@@ -597,17 +603,16 @@ class Cinemeta extends BaseClass {
         };
       }
 
-      // Ids that failed to produce a valid range, shared across every stage below
       const blacklist = new Set<string>();
 
-      // Fetches a candidate's episodes and resolves the range for this anime.
       const tryEpisodes = async (imdbId: string, type: string): Promise<ICinemetaEpisode[]> => {
-        if (blacklist.has(imdbId)) return [];
+        const key = Cinemeta.blacklistKey(type, imdbId);
+        if (blacklist.has(key)) return [];
 
         const raw = (await this.aioMetadata.fetchEpisodes(imdbId, type)).data ?? [];
         const range = raw.length > 0 ? this.resolveEpisodeRange(animeData, raw, type) : [];
 
-        if (range.length === 0) blacklist.add(imdbId);
+        if (range.length === 0) blacklist.add(key);
 
         return range;
       };
@@ -629,6 +634,7 @@ class Cinemeta extends BaseClass {
         }
       }
 
+      // 2. Kitsu -> Stremio imdb mapping. The mapping carries no type, so try both.
       if (!source) {
         const kitsuIdResult = await this.resolver.resolveAnilistKitsuMapping(anilistId);
         if (!kitsuIdResult.error && kitsuIdResult.data) {
@@ -636,21 +642,21 @@ class Cinemeta extends BaseClass {
           const stremioMapping = await this.resolver.fetchStremioImdbMappings(kitsuId, 'kitsuId');
 
           if (!stremioMapping.error && stremioMapping.data?.imdbId) {
-            const mediaType = 'series';
-            const episodes = await tryEpisodes(stremioMapping.data.imdbId, mediaType);
+            const imdbId = stremioMapping.data.imdbId;
 
-            if (episodes.length > 0) {
-              source = {
-                imdbId: stremioMapping.data.imdbId,
-                type: mediaType,
-                kitsuId: kitsuId,
-                episodes,
-              };
+            for (const type of Cinemeta.SEARCH_ORDER) {
+              const episodes = await tryEpisodes(imdbId, type);
+
+              if (episodes.length > 0) {
+                source = { imdbId, type, kitsuId, episodes };
+                break;
+              }
             }
           }
         }
       }
 
+      // 3. AIOMetadata provider-id mapping
       if (!source) {
         const mapping = await this.aioMetadata.fetchMappingsByProviderId(`anilist:${anilistId}`);
         const mapped = mapping.error ? null : mapping.data;
@@ -723,7 +729,15 @@ class Cinemeta extends BaseClass {
         kitsuId,
       }));
 
-      await upsertMapping(anilistId, source.type, { imdbId: source.imdbId });
+      const mappingChanged = !existing || existing.imdb_id !== source.imdbId || existing.media_type !== source.type;
+
+      if (mappingChanged) {
+        try {
+          await upsertMapping(anilistId, source.type, { imdbId: source.imdbId });
+        } catch (error) {
+          console.error(`upsertMapping failed for anilist:${anilistId}`, error);
+        }
+      }
 
       return { data: episodesWithIds };
     } catch (error) {
