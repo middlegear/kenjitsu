@@ -584,11 +584,11 @@ class Cinemeta extends BaseClass {
   private async fetchFranchise(anilistId: number): Promise<IResponse<ICineMetaSearch | null>> {
     try {
       const franchiseResponse = await this.resolver.resolveFranchiseMedia(anilistId);
-      if (franchiseResponse.error || !franchiseResponse.data || !franchiseResponse.data[1]) {
+      if (franchiseResponse.error || !franchiseResponse.data) {
         return { data: null, error: franchiseResponse.error || 'Franchise media not found' };
       }
 
-      const animeData = franchiseResponse.data[1];
+      const animeData = franchiseResponse.data[0];
 
       const queries = this.extractSearchQueries(animeData);
       const allResults: ICineMetaSearch[] = [];
