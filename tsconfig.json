@@ -12,6 +12,7 @@
     "moduleDetection": "force",
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
     "strict": true,
     "noUncheckedIndexedAccess": false,   // shut some undefined stuff
     "lib": ["ESNext"]

@@ -85,7 +85,7 @@ export class AnimeInfoResolver {
     }
 
     if (!kitsuAnimeId) {
-      const aioResult = await this.aioMetadata.fetchAnimeMappings(anilistId);
+      const aioResult = await this.aioMetadata.fetchMappingsByProviderId(`anilist:${anilistId}`);
 
       if (aioResult.data?.kitsuId) {
         const parsedId = Number(aioResult.data.kitsuId);
@@ -152,7 +152,7 @@ export class AnimeInfoResolver {
     }
 
     if (!kitsuAnimeId) {
-      const aioResult = await this.aioMetadata.fetchAnimeMappings(anilistId);
+      const aioResult = await this.aioMetadata.fetchMappingsByProviderId(`anilist:${anilistId}`);
 
       if (aioResult.data?.kitsuId) {
         const parsedId = Number(aioResult.data.kitsuId);

@@ -9,6 +9,13 @@ export const animeMappings = pgTable(
     tvdbId: integer('tvdb_id'),
     imdbId: text('imdb_id'),
     mediaType: text('media_type'),
+    imdbStart: text('imdb_start'),
+    imdbEnd: text('imdb_end'),
+    tmdbStart: text('tmdb_start'),
+    tmdbEnd: text('tmdb_end'),
+    tvdbStart: text('tvdb_start'),
+    tvdbEnd: text('tvdb_end'),
+
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   table => [
