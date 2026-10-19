@@ -515,7 +515,6 @@ class Cinemeta extends BaseClass {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(({ candidate }) => candidate);
-    console.log(result);
 
     return result;
   }
@@ -625,7 +624,12 @@ class Cinemeta extends BaseClass {
         const episodes = await tryEpisodes(existing.imdb_id, existing.media_type);
 
         if (episodes.length > 0) {
-          source = { imdbId: existing.imdb_id, type: existing.media_type, kitsuId: null, episodes };
+          source = {
+            imdbId: existing.imdb_id,
+            type: existing.media_type,
+            kitsuId: null,
+            episodes,
+          };
         }
       }
 
@@ -680,10 +684,19 @@ class Cinemeta extends BaseClass {
         return { data: [], error: 'No episodes found for this media', status: 404 };
       }
 
+      let kitsuId = source.kitsuId;
+      if (kitsuId == null) {
+        const mapping = await this.aioMetadata.fetchMappingsByProviderId(`anilist:${anilistId}`);
+        const mapped = mapping.error ? null : mapping.data;
+        if (mapped?.kitsuId) {
+          kitsuId = Number(mapped.kitsuId);
+        }
+      }
+
       const episodesWithIds: ICinemetaEpisode[] = finalizedEpisodes.map((ep, index) => ({
         ...ep,
         episodeNumber: index + 1,
-        kitsuId: source.kitsuId,
+        kitsuId,
       }));
 
       await upsertMapping(anilistId, source.type, { imdbId: source.imdbId });

@@ -237,7 +237,7 @@ class AIOMetadata extends BaseClass {
       if (episodes.length > 0) {
         await redisSetCache(cacheKey, result, 24);
       }
-      console.log('AIO Episodes', result);
+
       return result;
     } catch (error) {
       return { data: [], error: error instanceof Error ? error.message : String(error), status: 500 };
