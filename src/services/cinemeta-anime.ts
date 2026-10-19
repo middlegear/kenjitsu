@@ -444,8 +444,6 @@ class Cinemeta extends BaseClass {
   /**
    * Ranks search candidates by title similarity across all query variants
    * and returns the top `limit`, best first.
-   *
-
    */
   private findBestMatch(
     candidates: ICineMetaSearch[],
@@ -603,7 +601,6 @@ class Cinemeta extends BaseClass {
       const blacklist = new Set<string>();
 
       // Fetches a candidate's episodes and resolves the range for this anime.
-      // An empty range blacklists the id so it is never retried in this run.
       const tryEpisodes = async (imdbId: string, type: string): Promise<ICinemetaEpisode[]> => {
         if (blacklist.has(imdbId)) return [];
 
@@ -617,7 +614,6 @@ class Cinemeta extends BaseClass {
 
       let source: IEpisodeSource | null = null;
 
-      // 1. Known mappings, accepted only when they produce a valid episode range
       const existing = await getByAnilistId(anilistId);
 
       if (existing?.imdb_id && existing.media_type) {
@@ -630,6 +626,28 @@ class Cinemeta extends BaseClass {
             kitsuId: null,
             episodes,
           };
+        }
+      }
+
+      if (!source) {
+        const kitsuIdResult = await this.resolver.resolveAnilistKitsuMapping(anilistId);
+        if (!kitsuIdResult.error && kitsuIdResult.data) {
+          const kitsuId = kitsuIdResult.data;
+          const stremioMapping = await this.resolver.fetchStremioImdbMappings(kitsuId, 'kitsuId');
+
+          if (!stremioMapping.error && stremioMapping.data?.imdbId) {
+            const mediaType = 'series';
+            const episodes = await tryEpisodes(stremioMapping.data.imdbId, mediaType);
+
+            if (episodes.length > 0) {
+              source = {
+                imdbId: stremioMapping.data.imdbId,
+                type: mediaType,
+                kitsuId: kitsuId,
+                episodes,
+              };
+            }
+          }
         }
       }
 
@@ -651,6 +669,7 @@ class Cinemeta extends BaseClass {
         }
       }
 
+      // 4. Fallback search via title and franchise matching
       if (!source) {
         const finders = [
           (type: MediaType) => this.search(animeData, type, blacklist),
@@ -690,6 +709,11 @@ class Cinemeta extends BaseClass {
         const mapped = mapping.error ? null : mapping.data;
         if (mapped?.kitsuId) {
           kitsuId = Number(mapped.kitsuId);
+        } else {
+          const resolvedKitsu = await this.resolver.resolveAnilistKitsuMapping(anilistId);
+          if (!resolvedKitsu.error && resolvedKitsu.data) {
+            kitsuId = resolvedKitsu.data;
+          }
         }
       }
 
@@ -711,4 +735,5 @@ class Cinemeta extends BaseClass {
     }
   }
 }
+
 export { Cinemeta };
