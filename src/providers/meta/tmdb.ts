@@ -213,14 +213,7 @@ export class TheMovieDatabase extends BaseClass {
       const finalResult = { data: episodes };
 
       if (Array.isArray(episodes) && episodes.length > 0) {
-        const lastEpisode = episodes[episodes.length - 1];
-
-        const isLastFilled =
-          lastEpisode && lastEpisode.summary !== null && lastEpisode.rating !== null && lastEpisode.images !== null;
-
-        const duration = isLastFilled ? 168 : 1;
-
-        await redisSetCache<IResponse<IMetaMovieEpisodes[] | []>>(cacheKey, finalResult, duration);
+        await redisSetCache<IResponse<IMetaMovieEpisodes[] | []>>(cacheKey, finalResult, 1);
       }
 
       return finalResult;
