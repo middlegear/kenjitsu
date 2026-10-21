@@ -19,9 +19,9 @@ export interface IMetaMovie {
 export interface IMovieInfo extends IMetaMovie {
   artWorks: IMetaMovieArtworks;
 }
-export interface IMetaMovieInfo extends IMetaMovie {
+export interface IMetaTVInfo extends IMovieInfo {
   lastAired: string;
-  seasons: number;
+  totalSeasons: number;
   latestEpisode: {
     episodeId: string;
     title: string;
@@ -44,6 +44,7 @@ export interface IMetaMovieInfo extends IMetaMovie {
     rating: number;
     airDate: string;
   } | null;
+  seasons: IMetaMovieSeasons[] | [];
 }
 
 export interface IMetaMovieSeasons {
@@ -76,13 +77,15 @@ export interface IMetaMovieEpisodes {
   airDate: string | null;
   episodeType?: string | null;
   tmdbEpisodeId: number | null;
+  episodeNumber: number | null;
   title: string | null;
   summary: string | null;
   rating: number | null;
   seasonNumber: number | null;
   tmdbId?: number | null;
   runtime: string | null;
-  images: string | null;
+  images: string | null | any;
+  [x: string]: any;
 }
 
 export interface IMetaMoviePaginated<T> extends IBasePaginated<T> {
@@ -91,46 +94,4 @@ export interface IMetaMoviePaginated<T> extends IBasePaginated<T> {
 }
 export interface IMetaMovieInfoResponse<T> extends IResponse<T> {
   images: IMetaMovieArtworks | null;
-}
-export interface IMetaTvInfo<T> extends IMetaMovieInfoResponse<T> {
-  seasons: IMetaMovieSeasons[] | [];
-}
-export interface IAnimeListItem {
-  tmdbId: number;
-  name: string;
-  originalName: string;
-  posterImage: string | null;
-  backdrop: string | null;
-  rating: number | null;
-  genres: string;
-  episodes: number | string | null;
-  status: string;
-  country?: string;
-  language: string;
-  totalSeasons: number | null;
-  summary: string;
-  releaseDate: string;
-  lastAired: string;
-  latestEpisode: {
-    episodeId: string;
-    title: string;
-    episodeNumber: number;
-    episodeType: string;
-    season: number;
-    summary: string;
-    rating: number;
-    airDate: string;
-  } | null;
-  nextEpisode: {
-    episodeId: number;
-    title: string;
-    episodeType: string;
-    episodeNumber: number;
-    season: number;
-    summary: string;
-    rating: number;
-    airDate: string;
-  } | null;
-  seasons: IMetaMovieSeasons[];
-  artWorks: IMetaMovieArtworks;
 }

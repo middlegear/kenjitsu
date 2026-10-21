@@ -1,10 +1,10 @@
 import type { IResponse } from '../../types/base.js';
 import type {
-  IAnimeListItem,
   IMetaMovie,
   IMetaMovieArtworks,
   IMetaMovieEpisodes,
   IMetaMoviePaginated,
+  IMetaTVInfo,
   IMovieInfo,
 } from '../../types/meta/meta-movie.js';
 import { BaseClass, type ClientConfig } from '../models/base.js';
@@ -67,7 +67,7 @@ export class TheMovieDatabase extends BaseClass {
   /**
    * Fetches detailed TV show information from TMDb using append_to_response
    */
-  async fetchShowInfo(tmdbId: number): Promise<IResponse<IAnimeListItem | null>> {
+  async fetchShowInfo(tmdbId: number): Promise<IResponse<IMetaTVInfo | null>> {
     if (!tmdbId) {
       return {
         data: null,
@@ -77,7 +77,7 @@ export class TheMovieDatabase extends BaseClass {
     }
 
     const cacheKey = `tmdb-show-${tmdbId}`;
-    const cached = await redisGetCache<IResponse<IAnimeListItem | null>>(cacheKey);
+    const cached = await redisGetCache<IResponse<IMetaTVInfo | null>>(cacheKey);
     if (cached) return cached;
 
     try {
@@ -104,7 +104,8 @@ export class TheMovieDatabase extends BaseClass {
         };
       }
       const result = await response.json();
-      const data: IAnimeListItem = {
+
+      const data: IMetaTVInfo = {
         tmdbId: result.id || null,
         name: result.name || null,
         originalName: result.original_name || null,
@@ -153,7 +154,7 @@ export class TheMovieDatabase extends BaseClass {
       const finalResult = { data: data };
 
       if (data && data !== null) {
-        await redisSetCache<IResponse<IAnimeListItem | null>>(cacheKey, finalResult, 24);
+        await redisSetCache<IResponse<IMetaTVInfo | null>>(cacheKey, finalResult, 24);
       }
 
       return finalResult;
@@ -258,6 +259,7 @@ export class TheMovieDatabase extends BaseClass {
 
       const result = await response.json();
       const episode = {
+        episodeNumber: episodeNumber || null,
         airDate: result.air_date || null,
         title: result.name || null,
         summary: result.overview || null,

@@ -4,9 +4,10 @@ import { allowedAnimeProviders, type FastifyParams, type FastifyQuery, IAMetaFor
 import { type IMetaFormat, Seasons } from '../../types/meta/meta-anime.js';
 import { Cinemeta } from '../../services/cinemeta-anime.js';
 import { AnimeInfoResolver } from '../../services/anime-resolver.js';
+import { AnimeTmdb } from '../../services/anime-tmdb.js';
 
 const anilist = new Anilist();
-
+const resolver = new AnimeInfoResolver();
 export default async function AnilistRoutes(fastify: FastifyInstance) {
   fastify.get('/anime/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
     const { q, page = 1 } = request.query;
@@ -173,7 +174,7 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
     if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
 
     try {
-      const result = await new Cinemeta(new AnimeInfoResolver()).fetchAnimeEpisode(Number(id));
+      const result = await new Cinemeta(resolver).fetchAnimeEpisode(Number(id));
       if (!result || typeof result !== 'object') {
         return reply.status(502).send({ error: 'Invalid response' });
       }
@@ -213,6 +214,29 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
+
+  fastify.get('/anime/:id/meta', async (request: FastifyRequest<{ Params: FastifyParams }>, reply: FastifyReply) => {
+    const id = request.params.id;
+    if (!id) return reply.status(400).send({ error: "Missing 'id' parameter" });
+
+    try {
+      const result = await new AnimeTmdb(resolver).fetchAnimeMeta(Number(id));
+      if (!result || typeof result !== 'object') {
+        return reply.status(502).send({ error: 'Invalid response' });
+      }
+      if (result.error) {
+        return reply.status(result.status as number).send({ error: result.error });
+      }
+
+      return reply
+        .header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`)
+        .status(200)
+        .send(result);
+    } catch (error) {
+      return reply.status(500).send({ error: 'Internal server error' });
+    }
+  });
+
   fastify.get(
     'anime/:date/airingschedule',
 

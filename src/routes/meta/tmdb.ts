@@ -6,7 +6,6 @@ import type { FastifyParams, FastifyQuery } from '../../types/base.js';
 const tmdb = new TheMovieDatabase();
 
 export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
-
   fastify.get('/tv/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
     const { q, page = 1, year } = request.query;
 
@@ -53,7 +52,6 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
         if (result.error) {
           return reply.status(result.status ?? 500).send({ error: result.error });
         }
-
 
         const maxAge = category === 'popular' ? 24 : 168;
 
@@ -175,7 +173,6 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
     },
   );
 
-
   fastify.get('/movies/search', async (request: FastifyRequest<{ Querystring: FastifyQuery }>, reply: FastifyReply) => {
     const { q, page = 1, year } = request.query;
 
@@ -222,7 +219,6 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
         if (result.error) {
           return reply.status(result.status ?? 500).send({ error: result.error });
         }
-
 
         const maxAge = category === 'popular' ? 24 : 168;
 
@@ -289,8 +285,6 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
     }
   });
 
-
-
   fastify.get(
     '/anime/category/:category',
     async (request: FastifyRequest<{ Querystring: FastifyQuery; Params: FastifyParams }>, reply: FastifyReply) => {
@@ -336,8 +330,6 @@ export default async function TheMovieDatabaseRoutes(fastify: FastifyInstance) {
       }
     },
   );
-
-
 
   fastify.get(
     '/artworks/:category/:id',
