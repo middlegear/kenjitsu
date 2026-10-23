@@ -77,15 +77,15 @@ export interface IMetaMovieEpisodes {
   airDate: string | null;
   episodeType?: string | null;
   tmdbEpisodeId: number | null;
-  episodeNumber: number | null;
   title: string | null;
   summary: string | null;
   rating: number | null;
   seasonNumber: number | null;
+  seasonEpisodeNumber: number | null;
   tmdbId?: number | null;
   runtime: string | null;
   images: string | null | any;
-  [x: string]: any;
+  // [x: string]: any;
 }
 
 export interface IMetaMoviePaginated<T> extends IBasePaginated<T> {

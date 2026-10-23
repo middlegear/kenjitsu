@@ -199,7 +199,7 @@ export class TheMovieDatabase extends BaseClass {
       const result = await response.json();
       const episodes: IMetaMovieEpisodes[] = result.episodes.map((item: any) => ({
         airDate: item.air_date || null,
-        episodeNumber: item.episode_number || null,
+        seasonEpisodeNumber: item.episode_number || null,
         episodeType: item.episode_type || null,
         tmdbEpisodeId: item.id || null,
         title: item.name || null,
@@ -259,7 +259,7 @@ export class TheMovieDatabase extends BaseClass {
 
       const result = await response.json();
       const episode = {
-        episodeNumber: episodeNumber || null,
+        seasonEpisodeNumber: episodeNumber || null,
         airDate: result.air_date || null,
         title: result.name || null,
         summary: result.overview || null,

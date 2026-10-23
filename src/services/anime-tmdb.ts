@@ -260,7 +260,7 @@ class AnimeTmdb {
    */
   private snapBackForEarlyPremiere(episodes: IMetaMovieEpisodes[], startIndex: number, startStr: string): number {
     const anchor = episodes[startIndex];
-    if (!anchor || Number(anchor.episodeNumber) <= 1) return startIndex;
+    if (!anchor || Number(anchor.seasonEpisodeNumber) <= 1) return startIndex;
 
     const windowStart = this.addDaysToISO(startStr, -this.EARLY_PREMIERE_WINDOW_DAYS);
     let idx = startIndex;
@@ -272,7 +272,7 @@ class AnimeTmdb {
       idx--;
     }
 
-    return Number(episodes[idx].episodeNumber) <= 1 ? idx : startIndex;
+    return Number(episodes[idx].seasonEpisodeNumber) <= 1 ? idx : startIndex;
   }
 
   /**
@@ -612,7 +612,7 @@ class AnimeTmdb {
    *
 .
    *
-   * Episodes in the result carry a continuous `absoluteEpisodeNumber`;
+   * Episodes in the result carry a continuous `episodeNumber`;
    * `episodeNumber` stays the season-relative number from TMDB.
    */
   private async buildParsedEpisodes(
@@ -666,7 +666,7 @@ class AnimeTmdb {
 
     const rangeEpisodes = this.resolveEpisodeRange(candidateEpisodes, startStr, endStr, episodeCount);
 
-    return { data: rangeEpisodes.map((ep, index) => ({ ...ep, absoluteEpisodeNumber: index + 1 })) };
+    return { data: rangeEpisodes.map((ep, index) => ({ ...ep, episodeNumber: index + 1 })) };
   }
 
   /**
@@ -726,7 +726,7 @@ class AnimeTmdb {
         const seasonDiff = (a.seasonNumber ?? 0) - (b.seasonNumber ?? 0);
         if (seasonDiff !== 0) return seasonDiff;
 
-        const episodeDiff = (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0);
+        const episodeDiff = (a.seasonEpisodeNumber ?? 0) - (b.seasonEpisodeNumber ?? 0);
         if (episodeDiff !== 0) return episodeDiff;
 
         const timeA = toTime(a.airDate);
@@ -1046,14 +1046,14 @@ class AnimeTmdb {
 
       const episodeMeta: IMetaMovieEpisodes = {
         airDate: movieInfo.data.releaseDate,
-        episodeNumber: 1,
-        absoluteEpisodeNumber: 1,
+        // episodeNumber: 1,
         episodeType: 'movie',
         tmdbEpisodeId: null,
         title: movieInfo.data.name ?? movieInfo.data.originalName,
         summary: movieInfo.data.summary ?? null,
         rating: movieInfo.data.rating ? Number(movieInfo.data.rating) : null,
         seasonNumber: null,
+        seasonEpisodeNumber: null,
         tmdbId: movieInfo.data.tmdbId,
         runtime: movieInfo.data.runtime ? String(movieInfo.data.runtime) : null,
         images: backdropImage,
