@@ -48,8 +48,14 @@ class AnimeTmdb {
   /** Max episodes the early-premiere snap-back may pull in. */
   private readonly EARLY_PREMIERE_MAX_EPISODES = 3;
 
-  /** Minutes of slack around the closest runtime match when disambiguating OVA/ONA/SPECIAL/MUSIC entries by duration. */
-  private readonly DURATION_MATCH_TOLERANCE_MINUTES = 2;
+  /**
+   * Minutes of slack when matching an episode's runtime to the entry's duration.
+   * Only used to anchor the START of an entry, never to filter episodes out.
+   */
+  private readonly DURATION_MATCH_TOLERANCE_MINUTES = 5;
+
+  /** How far past the first date-qualified episode we look for a runtime match when anchoring the start. */
+  private readonly DURATION_START_SCAN_WINDOW_DAYS = 14;
 
   /** Days added to "today" when capping an ongoing entry at "already aired", so early-streaming premieres aren't filtered out. */
   private readonly AIRED_CAP_LOOKAHEAD_DAYS = 7;
@@ -225,13 +231,18 @@ class AnimeTmdb {
 
   /**
    * Index of the first episode on or after the start date (minus
-   * `START_BOUNDARY_TOLERANCE_DAYS`).
+   * `START_BOUNDARY_TOLERANCE_DAYS`), optionally refined by runtime.
+   *
+   * When `duration` is given, the date-qualified index is passed to
+   * `refineStartByDuration`, which can move the anchor forward to the first
+   * episode whose runtime matches. This is how entries that aired close
+   * together (e.g. TV shorts vs the main TV run) are told apart.
    *
    * Returns `-1` when dated episodes exist but none reach the start date: the
    * pool ended before the entry began, so it can't be the right show. Returns
    * `0` when no episode has a date at all.
    */
-  private locateStartIndexByDate(episodes: IMetaMovieEpisodes[], startStr: string): number {
+  private locateStartIndexByDate(episodes: IMetaMovieEpisodes[], startStr: string, duration: number | null = null): number {
     const toleratedStart = this.addDaysToISO(startStr, -this.START_BOUNDARY_TOLERANCE_DAYS);
     let sawDated = false;
 
@@ -239,10 +250,39 @@ class AnimeTmdb {
       const day = this.toDay(episodes[i].airDate);
       if (!day) continue;
       sawDated = true;
-      if (toleratedStart <= day) return i;
+      if (toleratedStart <= day) {
+        return duration ? this.refineStartByDuration(episodes, i, duration) : i;
+      }
     }
 
     return sawDated ? -1 : 0;
+  }
+
+  /**
+   * Starting at the first date-qualified episode, scans forward
+   * `DURATION_START_SCAN_WINDOW_DAYS` for the first episode whose runtime is
+   * within `DURATION_MATCH_TOLERANCE_MINUTES` of the entry's duration.
+   *
+   * Episodes are never removed; this only picks WHERE the entry starts. Falls
+   * back to the date-based index when nothing matches or runtimes are missing.
+   * A `null` runtime is deliberately not a wildcard, otherwise a runtime-less
+   * short could win the anchor.
+   */
+  private refineStartByDuration(episodes: IMetaMovieEpisodes[], dateIndex: number, duration: number): number {
+    const firstDay = this.toDay(episodes[dateIndex].airDate);
+    const scanLimit = firstDay ? this.addDaysToISO(firstDay, this.DURATION_START_SCAN_WINDOW_DAYS) : null;
+
+    for (let i = dateIndex; i < episodes.length; i++) {
+      const day = this.toDay(episodes[i].airDate);
+      if (scanLimit && day && day > scanLimit) break;
+
+      const runtime = episodes[i].runtime == null ? NaN : Number(episodes[i].runtime);
+      if (!Number.isNaN(runtime) && Math.abs(runtime - duration) <= this.DURATION_MATCH_TOLERANCE_MINUTES) {
+        return i;
+      }
+    }
+
+    return dateIndex;
   }
 
   /**
@@ -295,39 +335,24 @@ class AnimeTmdb {
   }
 
   /**
-   * Narrows the sorted, all-seasons episode list to the subset that plausibly
-   * belongs to the queried entry.
+   * Narrows the sorted, all-seasons episode list to the pool that plausibly
+   * contains the queried entry. Runtime is NOT used here; it only helps pick
+   * the start index later (see `locateStartIndexByDate`).
    *
    * - **TV**: seasons > 0 only. TMDB uses season 0 as a bucket for specials.
-   * - **Has a duration** (ONA/OVA/SPECIAL/MUSIC): keep episodes whose runtime
-   *   matches, since TMDB often lumps unrelated specials into season 0. Skipped
-   *   when the unfiltered pool already has exactly the reported episode count
-   *   and the filter would break that, as with anthologies whose episode
-   *   runtimes vary widely.
-   * - **No duration, no TV parent**: use every episode.
-   * - **No duration, TV parent**: choose season 0 or the numbered seasons by
-   *   start date, because some ONAs sit under a numbered season (e.g. Steel Ball
-   *   Run as JoJo season 6). Without a start date, defaults to season 0.
+   * - **No TV parent**: use every episode.
+   * - **TV parent**: choose season 0 or the numbered seasons by start date,
+   *   because some ONAs sit under a numbered season (e.g. Steel Ball Run as
+   *   JoJo season 6). Without a start date, defaults to season 0.
    */
   private selectCandidateEpisodes(
     episodes: IMetaMovieEpisodes[],
     animeFormat: string | null,
-    animeData: IMetaAnime,
     hasTvParent: boolean,
     startStr: string | null,
   ): IMetaMovieEpisodes[] {
     if (animeFormat === 'TV') {
       return episodes.filter(ep => Number(ep.seasonNumber) > 0);
-    }
-
-    const animeDuration = 'duration' in animeData ? (animeData.duration as number | null | undefined) : null;
-
-    if (animeDuration && animeDuration > 0) {
-      const byDuration = this.filterByClosestDuration(episodes, animeDuration);
-      const episodeCount = 'episodes' in animeData ? (animeData.episodes as number | null | undefined) : null;
-      const unfilteredMatchesCount = episodeCount != null && episodeCount > 0 && episodes.length === episodeCount;
-
-      return unfilteredMatchesCount && byDuration.length !== episodeCount ? episodes : byDuration;
     }
 
     if (!hasTvParent) return episodes;
@@ -352,32 +377,13 @@ class AnimeTmdb {
   }
 
   /**
-   * Keeps every episode whose runtime is within
-   * `DURATION_MATCH_TOLERANCE_MINUTES` of the closest match, so a uniform
-   * multi-episode OVA/special run is kept whole. Returns the input unchanged
-   * when no episode has a runtime.
-   */
-  private filterByClosestDuration(episodes: IMetaMovieEpisodes[], targetDuration: number): IMetaMovieEpisodes[] {
-    const withRuntime = episodes
-      .map(ep => ({ ep, runtime: ep.runtime == null ? NaN : Number(ep.runtime) }))
-      .filter(({ runtime }) => !Number.isNaN(runtime));
-
-    if (withRuntime.length === 0) return episodes;
-
-    const closestDiff = Math.min(...withRuntime.map(({ runtime }) => Math.abs(runtime - targetDuration)));
-
-    return withRuntime
-      .filter(({ runtime }) => Math.abs(runtime - targetDuration) <= closestDiff + this.DURATION_MATCH_TOLERANCE_MINUTES)
-      .map(({ ep }) => ep);
-  }
-
-  /**
    * Resolves the final episode list for the queried entry from the candidate
-   * pool, using whichever date/count metadata the source provides.
+   * pool, using whichever date/count/duration metadata the source provides.
    *
    * 1. Pool size equals the reported count: return the pool.
    * 2. No start date: return the pool.
-   * 3. Locate the start (with early-premiere snap-back); none found returns `[]`.
+   * 3. Locate the start by date, refined by runtime when `duration` is given,
+   *    then apply early-premiere snap-back; none found returns `[]`.
    * 4. No end date and no count: everything aired since the start.
    * 5. Otherwise work within the anchor's TMDB season, widening to the whole
    *    pool when the count or end date shows the entry spans several seasons,
@@ -388,13 +394,14 @@ class AnimeTmdb {
     startStr: string | null,
     endStr: string | null,
     episodeCount: number | null,
+    duration: number | null = null,
   ): IMetaMovieEpisodes[] {
     const count = episodeCount && episodeCount > 0 ? episodeCount : 0;
 
     if (count > 0 && episodes.length === count) return episodes;
     if (startStr === null) return episodes;
 
-    const rawStartIndex = this.locateStartIndexByDate(episodes, startStr);
+    const rawStartIndex = this.locateStartIndexByDate(episodes, startStr, duration);
     if (rawStartIndex < 0 || rawStartIndex >= episodes.length) return [];
 
     const startIndex = this.snapBackForEarlyPremiere(episodes, rawStartIndex, startStr);
@@ -427,7 +434,12 @@ class AnimeTmdb {
   /**
    * Resolves the end of a range that has a known end date.
    *
-  
+   * 1. If the first `mid_season`/`finale` marker at or after the start falls
+   *    within `COUR_BOUNDARY_TOLERANCE_DAYS` of the end date, cut right there.
+   * 2. Otherwise keep every episode dated on or before the end date (undated
+   *    episodes are kept).
+   * 3. If a count is known and the date cut disagrees with it, prefer an exact
+   *    count slice from the start when that slice is long enough.
    */
   private resolveRangeWithEndDate(
     episodes: IMetaMovieEpisodes[],
@@ -610,10 +622,12 @@ class AnimeTmdb {
    * Fetches every TMDB episode for a show and narrows it to the entry's range.
    * Runs once per TMDB candidate inside the retry loop.
    *
-.
+   * Flow: select the candidate pool by format/parent, guard against a wrong
+   * show (pool never reaches the start date), then resolve the range using
+   * dates, count and (for anchoring the start only) the entry's duration.
    *
-   * Episodes in the result carry a continuous `episodeNumber`;
-   * `episodeNumber` stays the season-relative number from TMDB.
+   * Episodes in the result carry a continuous `episodeNumber` (1..n) for the
+   * entry; `seasonEpisodeNumber` stays the season-relative number from TMDB.
    */
   private async buildParsedEpisodes(
     tmdbId: number,
@@ -645,14 +659,10 @@ class AnimeTmdb {
     const endStr = 'endDate' in animeData ? this.parseDateToISO(animeData.endDate) : null;
     const episodeCount = 'episodes' in animeData ? ((animeData.episodes as number | null | undefined) ?? null) : null;
     const animeFormat = 'format' in animeData && animeData.format ? String(animeData.format).toUpperCase() : null;
+    const rawDuration = 'duration' in animeData ? ((animeData.duration as number | null | undefined) ?? null) : null;
+    const animeDuration = rawDuration && rawDuration > 0 ? rawDuration : null;
 
-    const candidateEpisodes = this.selectCandidateEpisodes(
-      episodesResponse.data,
-      animeFormat,
-      animeData,
-      hasTvParent,
-      startStr,
-    );
+    const candidateEpisodes = this.selectCandidateEpisodes(episodesResponse.data, animeFormat, hasTvParent, startStr);
 
     if (candidateEpisodes.length === 0) {
       return { data: null, error: 'Could not narrow down a matching episode set', status: 404 };
@@ -664,7 +674,7 @@ class AnimeTmdb {
       return { data: null, error: `no TMDB episodes on/after ${startStr} (wrong show?)`, status: 404 };
     }
 
-    const rangeEpisodes = this.resolveEpisodeRange(candidateEpisodes, startStr, endStr, episodeCount);
+    const rangeEpisodes = this.resolveEpisodeRange(candidateEpisodes, startStr, endStr, episodeCount, animeDuration);
 
     return { data: rangeEpisodes.map((ep, index) => ({ ...ep, episodeNumber: index + 1 })) };
   }
