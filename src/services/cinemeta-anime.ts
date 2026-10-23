@@ -25,6 +25,11 @@ interface IEpisodeSource {
   episodes: ICinemetaEpisode[];
 }
 
+interface IStoredRange {
+  start: string | null;
+  end: string | null;
+}
+
 class Cinemeta extends BaseClass {
   constructor(
     private readonly resolver: AnimeInfoResolver,
@@ -36,6 +41,9 @@ class Cinemeta extends BaseClass {
   private static readonly MONTH_ABBR = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
   private static readonly SCHEDULE_TTL_HOURS = 1;
+
+  /** A finished anime's end id is only persisted once endDate is at least this old. */
+  private static readonly END_PERSIST_MIN_AGE_DAYS = 28;
 
   private static readonly UNRELEASED_STATUSES = new Set(['unreleased', 'not_yet_released', 'upcoming', 'tba']);
 
@@ -144,14 +152,21 @@ class Cinemeta extends BaseClass {
 
   /**
    * Resolves which Cinemeta episodes belong to this anime entry:
-   * 1. find the start anchor
-   * 2. take `episodes` count from the anchor
-   * 3. otherwise everything from the anchor up to endDate
-   * 4. otherwise everything from the anchor onward
+   * 1. find the start anchor (stored imdbId first for series, then date heuristics)
+   * 2. stored end imdbId, if present and found after the anchor (series only)
+   * 3. otherwise take `episodes` count from the anchor
+   * 4. otherwise everything from the anchor up to endDate
+   * 5. otherwise everything from the anchor onward
    *
+   * Movies ignore the stored range entirely.
    * An empty result means "not a valid range for this anime".
    */
-  private resolveEpisodeRange(anime: IMetaAnime, allEpisodes: ICinemetaEpisode[], mediaType: string): ICinemetaEpisode[] {
+  private resolveEpisodeRange(
+    anime: IMetaAnime,
+    allEpisodes: ICinemetaEpisode[],
+    mediaType: string,
+    stored?: IStoredRange,
+  ): ICinemetaEpisode[] {
     const startDate = this.normalizeDate(anime.releaseDate);
     const rawEnd = this.normalizeDate(anime.endDate);
     const episodeCount = anime.episodes;
@@ -168,17 +183,25 @@ class Cinemeta extends BaseClass {
         (this.normalizeDate(a.airDate)?.getTime() ?? 0) - (this.normalizeDate(b.airDate)?.getTime() ?? 0),
     );
 
-    if (!startDate) {
+    const storedStartIdx = mediaType !== 'movie' && stored?.start ? sorted.findIndex(ep => ep.imdbId === stored.start) : -1;
+
+    if (!startDate && storedStartIdx === -1) {
       return mediaType === 'movie' ? sorted.slice(0, 1) : sorted;
     }
 
-    const anchorIdx = this.findAnchorIndex(sorted, startDate, mediaType);
+    const anchorIdx =
+      storedStartIdx !== -1 ? storedStartIdx : startDate ? this.findAnchorIndex(sorted, startDate, mediaType) : null;
     if (anchorIdx === null) return [];
 
     const fromStart = sorted.slice(anchorIdx);
 
     if (mediaType === 'movie') {
       return fromStart.slice(0, 1);
+    }
+
+    if (stored?.end) {
+      const endIdx = fromStart.findIndex(ep => ep.imdbId === stored.end);
+      if (endIdx !== -1) return fromStart.slice(0, endIdx + 1);
     }
 
     if (typeof episodeCount === 'number' && episodeCount > 0) {
@@ -193,6 +216,27 @@ class Cinemeta extends BaseClass {
     }
 
     return fromStart;
+  }
+
+  /**
+   * End id that is safe to persist. All of these must hold:
+   * - the media is a series (movies never store a range)
+   * - the anime is FINISHED
+   * - AniList's endDate is at least END_PERSIST_MIN_AGE_DAYS old
+   * - the resolved episode count exactly matches AniList's reported count
+   */
+  private getPersistableEnd(anime: IMetaAnime, episodes: ICinemetaEpisode[], mediaType: string): string | null {
+    if (mediaType === 'movie') return null;
+    if (anime.status?.toUpperCase() !== 'FINISHED') return null;
+
+    const aniEnd = this.normalizeDate(anime.endDate);
+    if (!aniEnd) return null;
+    if (Date.now() - aniEnd.getTime() < Cinemeta.END_PERSIST_MIN_AGE_DAYS * 86_400_000) return null;
+
+    const expected = anime.episodes;
+    if (typeof expected !== 'number' || expected <= 0 || episodes.length !== expected) return null;
+
+    return episodes[episodes.length - 1]?.imdbId || null;
   }
 
   private async loadSchedule(): Promise<IResponse<IScheduleMap | null>> {
@@ -605,12 +649,12 @@ class Cinemeta extends BaseClass {
 
       const blacklist = new Set<string>();
 
-      const tryEpisodes = async (imdbId: string, type: string): Promise<ICinemetaEpisode[]> => {
+      const tryEpisodes = async (imdbId: string, type: string, stored?: IStoredRange): Promise<ICinemetaEpisode[]> => {
         const key = Cinemeta.blacklistKey(type, imdbId);
         if (blacklist.has(key)) return [];
 
         const raw = (await this.aioMetadata.fetchEpisodes(imdbId, type)).data ?? [];
-        const range = raw.length > 0 ? this.resolveEpisodeRange(animeData, raw, type) : [];
+        const range = raw.length > 0 ? this.resolveEpisodeRange(animeData, raw, type, stored) : [];
 
         if (range.length === 0) blacklist.add(key);
 
@@ -622,7 +666,11 @@ class Cinemeta extends BaseClass {
       const existing = await getByAnilistId(anilistId);
 
       if (existing?.imdb_id && existing.media_type) {
-        const episodes = await tryEpisodes(existing.imdb_id, existing.media_type);
+        const episodes = await tryEpisodes(
+          existing.imdb_id,
+          existing.media_type,
+          existing.media_type === 'movie' ? undefined : { start: existing.imdb_start, end: existing.imdb_end },
+        );
 
         if (episodes.length > 0) {
           source = {
@@ -729,11 +777,39 @@ class Cinemeta extends BaseClass {
         kitsuId,
       }));
 
+      const isMovie = source.type === 'movie';
       const mappingChanged = !existing || existing.imdb_id !== source.imdbId || existing.media_type !== source.type;
 
-      if (mappingChanged) {
+      let nextStart: string | null = null;
+      let nextEnd: string | null = null;
+
+      if (!isMovie) {
+        nextStart = source.episodes[0]?.imdbId || null;
+
+        const lastId = source.episodes[source.episodes.length - 1]?.imdbId || null;
+        const persistableEnd = this.getPersistableEnd(animeData, source.episodes, source.type);
+
+        const stillValidEnd =
+          !mappingChanged &&
+          animeData.status?.toUpperCase() === 'FINISHED' &&
+          !!existing?.imdb_end &&
+          existing.imdb_end === lastId
+            ? existing.imdb_end
+            : null;
+
+        nextEnd = persistableEnd ?? stillValidEnd;
+      }
+
+      const startChanged = nextStart !== (existing?.imdb_start ?? null);
+      const endChanged = nextEnd !== (existing?.imdb_end ?? null);
+
+      if (mappingChanged || startChanged || endChanged) {
         try {
-          await upsertMapping(anilistId, source.type, { imdbId: source.imdbId });
+          await upsertMapping(anilistId, source.type, {
+            imdbId: source.imdbId,
+            imdbStart: nextStart,
+            imdbEnd: nextEnd,
+          });
         } catch (error) {
           console.error(`upsertMapping failed for anilist:${anilistId}`, error);
         }

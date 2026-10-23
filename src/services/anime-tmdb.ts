@@ -21,6 +21,12 @@ interface SearchAnchor {
   year: number | null;
   format: string;
 }
+
+interface IStoredRange {
+  start: string | null;
+  end: string | null;
+}
+
 export interface IAnimeTVMetaInfo extends IMetaTVInfo {
   parsedEpisodes: IMetaMovieEpisodes[] | [];
   [x: string]: any;
@@ -59,6 +65,9 @@ class AnimeTmdb {
 
   /** Days added to "today" when capping an ongoing entry at "already aired", so early-streaming premieres aren't filtered out. */
   private readonly AIRED_CAP_LOOKAHEAD_DAYS = 7;
+
+  /** A finished entry's end key is only persisted once AniList's endDate is at least this old. */
+  private readonly END_PERSIST_MIN_AGE_DAYS = 28;
 
   /* ---------------------------- Candidate matching --------------------------- */
 
@@ -102,6 +111,33 @@ class AnimeTmdb {
   /** First 10 characters (`YYYY-MM-DD`) of an episode air date, or `null` when undated. */
   private toDay(airDate?: string | null): string | null {
     return airDate ? airDate.slice(0, 10) : null;
+  }
+
+  /** `season:seasonEpisode` key, or `null` for episodes without both numbers (e.g. movies). */
+  private episodeKey(ep?: IMetaMovieEpisodes | null): string | null {
+    if (!ep || ep.seasonNumber == null || ep.seasonEpisodeNumber == null) return null;
+    return `${ep.seasonNumber}:${ep.seasonEpisodeNumber}`;
+  }
+
+  /**
+   * End key that is safe to persist. All of these must hold:
+   * - the anime is FINISHED
+   * - AniList's endDate is at least END_PERSIST_MIN_AGE_DAYS old
+   * - the resolved episode count exactly matches AniList's reported count
+   */
+  private getPersistableEnd(animeData: IMetaAnime, episodes: IMetaMovieEpisodes[]): string | null {
+    if (String(animeData.status ?? '').toLowerCase() !== 'finished') return null;
+
+    const endStr = 'endDate' in animeData ? this.parseDateToISO(animeData.endDate) : null;
+    if (!endStr) return null;
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (endStr > this.addDaysToISO(today, -this.END_PERSIST_MIN_AGE_DAYS)) return null;
+
+    const expected = 'episodes' in animeData ? ((animeData.episodes as number | null | undefined) ?? null) : null;
+    if (typeof expected !== 'number' || expected <= 0 || episodes.length !== expected) return null;
+
+    return this.episodeKey(episodes[episodes.length - 1]);
   }
 
   /**
@@ -381,9 +417,10 @@ class AnimeTmdb {
    * pool, using whichever date/count/duration metadata the source provides.
    *
    * 1. Pool size equals the reported count: return the pool.
-   * 2. No start date: return the pool.
-   * 3. Locate the start by date, refined by runtime when `duration` is given,
-   *    then apply early-premiere snap-back; none found returns `[]`.
+   * 2. Stored start key found in the pool: use it as the anchor. Otherwise
+   *    locate the start by date (refined by runtime, then early-premiere
+   *    snap-back); no start date and no stored start returns the pool.
+   * 3. Stored end key found after the anchor: cut right there.
    * 4. No end date and no count: everything aired since the start.
    * 5. Otherwise work within the anchor's TMDB season, widening to the whole
    *    pool when the count or end date shows the entry spans several seasons,
@@ -395,19 +432,38 @@ class AnimeTmdb {
     endStr: string | null,
     episodeCount: number | null,
     duration: number | null = null,
+    stored?: IStoredRange,
   ): IMetaMovieEpisodes[] {
     const count = episodeCount && episodeCount > 0 ? episodeCount : 0;
 
     if (count > 0 && episodes.length === count) return episodes;
-    if (startStr === null) return episodes;
 
-    const rawStartIndex = this.locateStartIndexByDate(episodes, startStr, duration);
-    if (rawStartIndex < 0 || rawStartIndex >= episodes.length) return [];
+    const storedStartIndex = stored?.start ? episodes.findIndex(ep => this.episodeKey(ep) === stored.start) : -1;
 
-    const startIndex = this.snapBackForEarlyPremiere(episodes, rawStartIndex, startStr);
+    let startIndex: number;
+
+    if (storedStartIndex !== -1) {
+      // Verified earlier, so skip the date/runtime heuristics and the snap-back
+      startIndex = storedStartIndex;
+    } else {
+      if (startStr === null) return episodes;
+
+      const rawStartIndex = this.locateStartIndexByDate(episodes, startStr, duration);
+      if (rawStartIndex < 0 || rawStartIndex >= episodes.length) return [];
+
+      startIndex = this.snapBackForEarlyPremiere(episodes, rawStartIndex, startStr);
+    }
+
+    // Stored end is authoritative: it was verified when the show was complete.
+    // Searching only from startIndex guarantees end >= start, and it works across seasons.
+    if (stored?.end) {
+      const endIndex = episodes.findIndex((ep, i) => i >= startIndex && this.episodeKey(ep) === stored.end);
+      if (endIndex !== -1) return episodes.slice(startIndex, endIndex + 1);
+    }
 
     if (endStr === null && count === 0) {
-      return this.filterAiredFromIndex(episodes, startIndex, startStr);
+      const today = new Date().toISOString().slice(0, 10);
+      return this.filterAiredFromIndex(episodes, startIndex, startStr ?? today);
     }
 
     const anchor = episodes[startIndex];
@@ -625,6 +681,7 @@ class AnimeTmdb {
    * Flow: select the candidate pool by format/parent, guard against a wrong
    * show (pool never reaches the start date), then resolve the range using
    * dates, count and (for anchoring the start only) the entry's duration.
+   * A stored start key counts as proof the pool is the right show.
    *
    * Episodes in the result carry a continuous `episodeNumber` (1..n) for the
    * entry; `seasonEpisodeNumber` stays the season-relative number from TMDB.
@@ -634,6 +691,7 @@ class AnimeTmdb {
     showInfo: Partial<IAnimeTVMetaInfo>,
     animeData: IMetaAnime,
     hasTvParent: boolean,
+    stored?: IStoredRange,
   ): Promise<IResponse<IMetaMovieEpisodes[] | null>> {
     const seasonNumbers = (showInfo.seasons ?? []).map(season => Number(season.seasonNumber));
 
@@ -669,12 +727,18 @@ class AnimeTmdb {
     }
 
     const poolMatchesCount = episodeCount != null && episodeCount > 0 && candidateEpisodes.length === episodeCount;
+    const storedStartFound = !!stored?.start && candidateEpisodes.some(ep => this.episodeKey(ep) === stored.start);
 
-    if (startStr !== null && !poolMatchesCount && this.locateStartIndexByDate(candidateEpisodes, startStr) === -1) {
+    if (
+      startStr !== null &&
+      !poolMatchesCount &&
+      !storedStartFound &&
+      this.locateStartIndexByDate(candidateEpisodes, startStr) === -1
+    ) {
       return { data: null, error: `no TMDB episodes on/after ${startStr} (wrong show?)`, status: 404 };
     }
 
-    const rangeEpisodes = this.resolveEpisodeRange(candidateEpisodes, startStr, endStr, episodeCount, animeDuration);
+    const rangeEpisodes = this.resolveEpisodeRange(candidateEpisodes, startStr, endStr, episodeCount, animeDuration, stored);
 
     return { data: rangeEpisodes.map((ep, index) => ({ ...ep, episodeNumber: index + 1 })) };
   }
@@ -932,9 +996,12 @@ class AnimeTmdb {
 
       for (let attempt = 0; attempt < this.MAX_TMDB_CANDIDATE_ATTEMPTS; attempt++) {
         let tmdbId: number;
+        let stored: IStoredRange | undefined;
 
         if (attempt === 0 && cachedTmdbId) {
           tmdbId = cachedTmdbId;
+
+          stored = { start: mappings?.tmdb_start ?? null, end: mappings?.tmdb_end ?? null };
         } else {
           const tvResponse = await this.fetchTheMovieDatabaseTv(anilistId, animeData, blacklist);
 
@@ -966,7 +1033,7 @@ class AnimeTmdb {
           continue;
         }
 
-        const episodesResult = await this.buildParsedEpisodes(tmdbId, showInfo, animeData, hasTvParent);
+        const episodesResult = await this.buildParsedEpisodes(tmdbId, showInfo, animeData, hasTvParent, stored);
         const finalEpisodes = episodesResult.data ?? [];
 
         const earlyAiringNoEpisodes = isAiring && !episodesResult.error && finalEpisodes.length === 0;
@@ -989,7 +1056,26 @@ class AnimeTmdb {
           }
         }
 
-        await upsertMapping(anilistId, undefined, { tmdbId });
+        // Persist. finalEpisodes are real TMDB episodes (TMDB has no padding),
+        // and seasonNumber / seasonEpisodeNumber survive the episodeNumber renumbering.
+        const tmdbStart = this.episodeKey(finalEpisodes[0]);
+        const tmdbEnd = this.getPersistableEnd(animeData, finalEpisodes);
+
+        const mappingChanged = cachedTmdbId !== tmdbId;
+        const startChanged = tmdbStart !== null && tmdbStart !== mappings?.tmdb_start;
+        const endChanged = tmdbEnd !== null && tmdbEnd !== mappings?.tmdb_end;
+
+        if (mappingChanged || startChanged || endChanged) {
+          try {
+            await upsertMapping(anilistId, undefined, {
+              tmdbId,
+              tmdbStart: tmdbStart ?? (mappingChanged ? null : undefined),
+              tmdbEnd: tmdbEnd ?? (mappingChanged ? null : undefined),
+            });
+          } catch (error) {
+            console.error(`upsertMapping failed for anilist:${anilistId}`, error);
+          }
+        }
 
         return { data: { ...showInfo, parsedEpisodes: finalEpisodes } };
       }
@@ -1045,7 +1131,8 @@ class AnimeTmdb {
 
         tmdbId = Number(bestMatch.tmdbId);
 
-        await upsertMapping(anilistId, undefined, { tmdbId });
+        // Movies never store a start/end. Clear any range left over from an earlier TV mapping.
+        await upsertMapping(anilistId, undefined, { tmdbId, tmdbStart: null, tmdbEnd: null });
       }
 
       const movieInfo = await this.tmdb.fetchMovieInfo(tmdbId);
