@@ -484,7 +484,7 @@ export class Anikoto extends AnimeParser {
         status: 400,
       };
     }
-    //// remeber to clean this up and refactor it as one extractor
+
     if (episodeId.startsWith('http')) {
       const serverUrl = new URL(episodeId);
       switch (server) {

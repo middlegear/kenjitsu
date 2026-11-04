@@ -5,7 +5,7 @@ import { Anizone } from '../../providers/anime/anizone.js';
 import type { FastifyQuery, FastifyParams } from '../../types/base.js';
 
 const baseUrl = process.env.ANIZONEURL || 'https://anizone.to';
-const anizone = new Anizone(baseUrl);
+const anizone = new Anizone(baseUrl, { browser: 'chrome151' });
 
 export default async function AnizoneRoutes(fastify: FastifyInstance) {
   fastify.get(

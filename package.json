@@ -65,7 +65,6 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.8",
-    "fastify-metrics": "^15.0.0",
     "fuzzball": "^2.2.6",
     "impit": "^0.14.8",
     "ioredis": "^5.11.1",
