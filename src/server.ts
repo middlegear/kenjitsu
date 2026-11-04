@@ -1,13 +1,14 @@
 import 'dotenv/config';
 import Fastify, {
   type FastifyInstance,
+  type FastifyPluginAsync,
   type FastifyReply,
   type FastifyRequest,
   type FastifyServerOptions,
   type RawServerDefault,
 } from 'fastify';
 import events from 'node:events';
-
+import metricsPlugin from 'fastify-metrics';
 import StaticRoutes from './routes/static.js';
 import AnizoneRoutes from './routes/anime/anizone.js';
 import AnilistRoutes from './routes/meta/anilist.js';
@@ -80,6 +81,15 @@ async function FastifyApp() {
     }
   });
 
+  const metrics = metricsPlugin as unknown as FastifyPluginAsync<{
+    endpoint: string;
+    routeMetrics: { enabled: boolean };
+  }>;
+
+  await app.register(metrics, {
+    endpoint: '/metrics',
+    routeMetrics: { enabled: true },
+  });
   await app.register(rateLimitPlugIn, ratelimitOptions);
 
   await checkRedis();
