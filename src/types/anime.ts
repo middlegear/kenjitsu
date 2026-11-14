@@ -55,7 +55,7 @@ export type IBaseAnimeResponse<T> = IResponse<T> & {
 export interface IBaseAnimeServerResponse<T> extends IResponse<T> {
   [x: string]: any;
 }
-export type AnikotoServers = 'vidstream-2' | 'vidcloud-1' | 'vidplay-1' | 'hd-1' | 'hd-2';
+export type AnikotoServers = 'vidstream-2' | 'hd-1' | 'hd-2';
 
 export const IGenres = {
   action: 'action',

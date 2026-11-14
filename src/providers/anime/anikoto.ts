@@ -923,6 +923,10 @@ export class Anikoto extends AnimeParser {
         const $li = $(li);
         const serverName = $li.text().trim().toLowerCase() || null;
 
+        if (serverName?.toLowerCase() === 'vidplay' || serverName?.includes('vidplay')) {
+          return;
+        }
+
         const server = {
           serverId: $li.attr('data-sv-id') ?? null,
           serverName: serverName,
@@ -994,7 +998,7 @@ export class Anikoto extends AnimeParser {
    * @throws Error if no servers are available
    */
   private findServerId(servers: IAnimeServerInfo, category: ISubOrDub, server: AnikotoServers): string {
-    const serverPreference: AnikotoServers[] = ['vidstream-2', 'vidcloud-1'];
+    const serverPreference: AnikotoServers[] = ['vidstream-2'];
     const versionPreference: ISubOrDub[] = ['sub', 'dub'];
     const versionCandidates: ISubOrDub[] = [category, ...versionPreference.filter(v => v !== category)];
     let selectedMediaId: string | null = null;
