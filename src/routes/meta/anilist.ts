@@ -228,12 +228,10 @@ export default async function AnilistRoutes(fastify: FastifyInstance) {
         return reply.status(result.status as number).send({ error: result.error });
       }
 
-      return (
-        reply
-          // .header('Cache-Control', `public, s-maxage=${1 * 60 * 60}, stale-while-revalidate=300`)
-          .status(200)
-          .send(result)
-      );
+      return reply
+        .header('Cache-Control', `public, s-maxage=${0.5 * 60 * 60}, stale-while-revalidate=300`)
+        .status(200)
+        .send(result);
     } catch (error) {
       return reply.status(500).send({ error: 'Internal server error' });
     }
